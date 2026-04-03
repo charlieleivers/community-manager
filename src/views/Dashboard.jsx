@@ -1,63 +1,57 @@
 import React from 'react';
-import { Users, Shield, Star, MoveRight } from 'lucide-react';
+import { MoveRight } from 'lucide-react';
 
-// Notice we accept "teams", "members", and "setActiveTab" inside the brackets!
 export default function Dashboard({ teams, members, setActiveTab }) {
   return (
-    <div className="space-y-6 animate-fade-in">
-      <h2 className="text-3xl font-bold text-gray-800">Community Overview</h2>
+    <div className="animate-fade-in space-y-8">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white">Overview</h2>
+          <p className="text-gray-500 dark:text-slate-400 mt-2 font-medium">Real-time community health and distribution.</p>
+        </div>
+      </div>
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
-          <div className="p-4 bg-blue-50 text-blue-600 rounded-xl"><Users size={28} /></div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Total Members</p>
-            <p className="text-3xl font-bold text-gray-800">{members.length}</p>
-          </div>
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm transition-colors">
+          <p className="text-gray-400 dark:text-slate-500 font-bold text-xs uppercase tracking-widest mb-1">Active Personnel</p>
+          <h3 className="text-5xl font-black text-gray-900 dark:text-white">{members.filter(m => m.status === 'active').length}</h3>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
-          <div className="p-4 bg-purple-50 text-purple-600 rounded-xl"><Shield size={28} /></div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Active Teams</p>
-            <p className="text-3xl font-bold text-gray-800">{teams.length}</p>
-          </div>
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm transition-colors">
+          <p className="text-gray-400 dark:text-slate-500 font-bold text-xs uppercase tracking-widest mb-1">Live Teams</p>
+          <h3 className="text-5xl font-black text-gray-900 dark:text-white">{teams.length}</h3>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
-          <div className="p-4 bg-amber-50 text-amber-600 rounded-xl"><Star size={28} /></div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Total Mentors</p>
-            <p className="text-3xl font-bold text-gray-800">{members.filter(m => m.isMentor).length}</p>
-          </div>
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm transition-colors">
+          <p className="text-gray-400 dark:text-slate-500 font-bold text-xs uppercase tracking-widest mb-1">Pending Requests</p>
+          <h3 className="text-5xl font-black text-blue-600 dark:text-blue-400">{members.filter(m => m.status === 'pending').length}</h3>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
-          <h3 className="text-xl font-bold text-gray-800">Team Summaries</h3>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {teams.map(team => {
-            const teamMembers = members.filter(m => m.teamId === team.id);
-            return (
-              <div key={team.id} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div className="flex items-center space-x-4">
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: team.color }}></div>
-                  <span className="font-semibold text-gray-800 text-lg">{team.name}</span>
-                  {team.isMgmt && <span className="px-2 py-1 text-xs bg-gray-800 text-white rounded-md font-medium">MGMT</span>}
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm transition-colors">
+        <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Active Divisions</h3>
+        <div className="grid gap-4">
+          {teams.map(team => (
+            <div 
+              key={team.id} 
+              className="flex items-center justify-between p-5 bg-gray-50 dark:bg-slate-800 rounded-2xl hover:bg-gray-100 dark:hover:bg-slate-700/80 border border-transparent dark:border-slate-700/50 transition-all cursor-pointer" 
+              onClick={() => setActiveTab(team.id)}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center font-bold text-blue-600 dark:text-blue-400 border border-gray-100 dark:border-slate-600 shadow-sm">
+                  {team.name.charAt(0)}
                 </div>
-                <div className="flex items-center space-x-6 text-gray-500">
-                  <span>{teamMembers.length} Members</span>
-                  <button 
-                    onClick={() => setActiveTab(team.id)}
-                    className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center space-x-1"
-                  >
-                    <span>View Team</span> <MoveRight size={16} />
-                  </button>
+                <div>
+                  <h4 className="font-bold text-gray-900 dark:text-white text-lg">{team.name}</h4>
+                  <p className="text-sm text-gray-500 dark:text-slate-400">{members.filter(m => m.teamId === team.id).length} Members</p>
                 </div>
               </div>
-            );
-          })}
+              <MoveRight className="text-gray-300 dark:text-slate-500" size={20} />
+            </div>
+          ))}
+          {teams.length === 0 && (
+             <p className="text-center p-8 text-gray-400 dark:text-slate-500 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700">No active divisions. Go to Manage Teams to create one.</p>
+          )}
         </div>
       </div>
     </div>
-  );// PASTE EVERYTHING FROM <div className="space-y-6 animate-fade-in"> DOWN TO THE END OF THE DASHBOARD HERE
+  );
 }
