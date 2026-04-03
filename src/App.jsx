@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // FIREBASE IMPORTS
-import { db, auth } from './firebase';
+import { auth, db } from './firebase-config.js';
 import { 
   collection, onSnapshot, doc, setDoc, deleteDoc, 
   query, where 

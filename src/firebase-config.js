@@ -21,8 +21,9 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize and export services
+// We are moving to a default export object to bypass Rollup/Vite named export resolution issues
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 export { auth, db };
+export default app;
