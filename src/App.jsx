@@ -24,7 +24,8 @@ import MemberModal from './modals/MemberModal';
 import TeamModal from './modals/TeamModal';
 import RoleModal from './modals/RoleModal';
 
-const MASTER_ADMIN_PASSWORD = "admin"; 
+// This looks for a variable called VITE_ADMIN_PASSWORD in your environment
+const MASTER_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 
 export default function App() {
   // --- CORE STATE ---
@@ -197,7 +198,69 @@ export default function App() {
       }
     }
   };
+// Verification logic for the toggle endpoint
+const toggleDebugMode = async (user, durationMinutes) => {
+    // 1. Strict Role Check
+    if (user.role !== 'SUPER_ADMIN') {
+        throw new Error("Unauthorized: Super Admin privileges required.");
+    }
 
+    // 2. Calculate Expiration (Step 4: TTL)
+    const expiresAt = Date.now() + (durationMinutes * 60 * 1000);
+
+    // 3. Update System Configuration
+    await SystemSettings.update({
+        debug_enabled: true,
+        debug_expires_at: expiresAt,
+        enabled_by: user.id
+    });
+};
+
+const isDebugActive = async () => {
+    const settings = await SystemSettings.get();
+    
+    if (!settings.debug_enabled) return false;
+
+    // Check if the current time is past the TTL
+    if (Date.now() > settings.debug_expires_at) {
+        // Auto-disable if expired
+        await SystemSettings.update({ debug_enabled: false });
+        return false;
+    }
+
+    return true;
+};
+
+const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
+
+const maskSensitiveData = (data) => {
+    const masked = JSON.parse(JSON.stringify(data)); // Deep clone
+    
+    const redact = (obj) => {
+        for (let key in obj) {
+            if (SENSITIVE_KEYS.includes(key.toLowerCase())) {
+                obj[key] = "[REDACTED]";
+            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                redact(obj[key]);
+            }
+        }
+    };
+
+    redact(masked);
+    return masked;
+};
+// Replace '1234567890' with your actual numeric Discord UID
+const YOUR_DISCORD_ID = "826277251414360075";
+
+if (discordUID === YOUR_DISCORD_ID) {
+  setCurrentUser({ 
+    id: 'superadmin', 
+    name: 'System Owner', 
+    isSystemAdmin: true, 
+    status: 'active', 
+    darkMode: true 
+  });
+}
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (authForm.discordId === 'debug' && authForm.password === 'debug') {
