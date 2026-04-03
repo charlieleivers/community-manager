@@ -7,9 +7,8 @@ export default function TeamModal({ teamModal, setTeamModal }) {
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // This ensures the form pre-fills if you are editing an existing team
   useEffect(() => {
-    if (teamModal.isOpen && teamModal.data) {
+    if (teamModal?.isOpen && teamModal?.data) {
       setFormData({
         name: teamModal.data.name || '',
         description: teamModal.data.description || ''
@@ -19,24 +18,32 @@ export default function TeamModal({ teamModal, setTeamModal }) {
     }
   }, [teamModal]);
 
-  if (!teamModal.isOpen) return null;
+  if (!teamModal?.isOpen) return null;
 
   const handleSave = async (e) => {
     e.preventDefault();
+    console.log("--- TEAM MODAL SAVE INITIATED ---");
+    console.log("1. Form Data Captured:", formData);
     setIsSubmitting(true);
     
     try {
+      if (!db) throw new Error("CRITICAL: 'db' is undefined. Check firebase-config.js import.");
+
       const id = teamModal.data?.id || `t${Date.now()}`;
-      // Verify this path exactly matches your Firebase structure
-      const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'teams', id);
+      console.log("2. Generated ID:", id);
       
+      const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'teams', id);
+      console.log("3. Created Doc Reference:", docRef.path);
+      
+      console.log("4. Awaiting Firebase setDoc...");
       await setDoc(docRef, { ...formData, id }, { merge: true });
+      console.log("5. Firebase SUCCESS! Closing Modal.");
       
       setTeamModal({ isOpen: false, data: null });
       setFormData({ name: '', description: '' }); 
     } catch (error) {
-      console.error("Firebase Save Error:", error);
-      alert(`FAILED TO SAVE TO DATABASE:\n${error.message}`);
+      console.error("TEAM MODAL CRASH:", error.message);
+      alert(`FAILED:\n${error.message}`);
     } finally {
       setIsSubmitting(false);
     }

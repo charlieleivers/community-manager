@@ -8,7 +8,7 @@ export default function RoleModal({ roleModal, setRoleModal, availablePermission
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (roleModal.isOpen && roleModal.data) {
+    if (roleModal?.isOpen && roleModal?.data) {
       setFormData({
         name: roleModal.data.name || '',
         scope: roleModal.data.scope || 'TEAM',
@@ -19,7 +19,7 @@ export default function RoleModal({ roleModal, setRoleModal, availablePermission
     }
   }, [roleModal]);
 
-  if (!roleModal.isOpen) return null;
+  if (!roleModal?.isOpen) return null;
 
   const togglePerm = (permId) => {
     setFormData(prev => ({
@@ -32,19 +32,28 @@ export default function RoleModal({ roleModal, setRoleModal, availablePermission
 
   const handleSave = async (e) => {
     e.preventDefault();
+    console.log("--- ROLE MODAL SAVE INITIATED ---");
+    console.log("1. Form Data Captured:", formData);
     setIsSubmitting(true);
 
     try {
+      if (!db) throw new Error("CRITICAL: 'db' is undefined. Check firebase-config.js import.");
+
       const id = roleModal.data?.id || `r${Date.now()}`;
-      const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'roles', id);
+      console.log("2. Generated ID:", id);
       
+      const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'roles', id);
+      console.log("3. Created Doc Reference:", docRef.path);
+      
+      console.log("4. Awaiting Firebase setDoc...");
       await setDoc(docRef, { ...formData, id }, { merge: true });
+      console.log("5. Firebase SUCCESS! Closing Modal.");
       
       setRoleModal({ isOpen: false, data: null });
       setFormData({ name: '', scope: 'TEAM', customPerms: [] });
     } catch (error) {
-      console.error("Firebase Save Error:", error);
-      alert(`FAILED TO SAVE TO DATABASE:\n${error.message}`);
+      console.error("ROLE MODAL CRASH:", error.message);
+      alert(`FAILED:\n${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
