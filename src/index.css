@@ -1,8 +1,2 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Add this to stop the browser from forcing a white background */
-body, html {
-  background-color: transparent !important;
-}
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
