@@ -1,58 +1,63 @@
 import React from 'react';
-import { Shield, Plus, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield } from 'lucide-react';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebase-config.js';
 
-export default function RoleManagement({ roles, setRoles, setRoleModal }) {
+export default function RoleManagement({ roles, setRoleModal }) {
+  const handleDelete = async (id, name) => {
+    if (window.confirm(`Are you sure you want to delete the ${name} role?`)) {
+      await deleteDoc(doc(db, 'artifacts', 'community-manager', 'public', 'data', 'roles', id));
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+    <div className="animate-fade-in space-y-8">
+      <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Role Hierarchy</h2>
-          <p className="text-gray-500 mt-1">Configure permissions and authority levels across the system.</p>
+          <h2 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white">Role Hierarchy</h2>
+          <p className="text-gray-500 dark:text-slate-400 mt-2 font-medium">Define access levels and global scopes.</p>
         </div>
         <button 
-          onClick={() => setRoleModal({ isOpen: true })}
-          className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-purple-200"
+          onClick={() => setRoleModal({ isOpen: true, data: null })}
+          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold shadow-lg transition-all"
         >
-          <Plus size={20} /> <span>New Role</span>
+          <Plus size={20} /> <span>Create Role</span>
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Level</th>
-              <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Role Name</th>
-              <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Scope</th>
-              <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {roles.map((role) => (
-              <tr key={role.id} className="hover:bg-gray-50 transition-colors">
-                <td className="p-4"><span className="font-mono font-bold text-gray-400">#{role.level}</span></td>
-                <td className="p-4 flex items-center space-x-3">
-                  <Shield size={18} className="text-purple-500" />
-                  <span className="font-bold text-gray-800">{role.name}</span>
-                </td>
-                <td className="p-4">
-                  <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
-                    role.scope === 'MANAGEMENT' ? 'bg-red-100 text-red-700' : 
-                    role.scope === 'ALL' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {role.scope}
-                  </span>
-                </td>
-                <td className="p-4">
-                   <div className="flex space-x-2">
-                      <button className="p-1 hover:bg-white rounded border border-transparent hover:border-gray-200"><ChevronUp size={16} /></button>
-                      <button className="p-1 hover:bg-white rounded border border-transparent hover:border-gray-200"><ChevronDown size={16} /></button>
-                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {roles.map(role => (
+          <div key={role.id} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500 rounded-l-3xl"></div>
+            <div className="flex justify-between items-start ml-2">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+                  <Shield size={18} className="text-blue-500" />
+                  <span>{role.name}</span>
+                </h3>
+                <span className="inline-block mt-3 text-[10px] font-black tracking-widest uppercase bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 px-3 py-1.5 rounded-lg">
+                  Scope: {role.scope}
+                </span>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {role.customPerms?.map(perm => (
+                    <span key={perm} className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-md font-medium border border-blue-100 dark:border-blue-800/50">
+                      {perm.replace('_', ' ')}
+                    </span>
+                  ))}
+                  {(!role.customPerms || role.customPerms.length === 0) && <span className="text-xs text-gray-400 dark:text-slate-500">No specific permissions</span>}
+                </div>
+              </div>
+              <div className="flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => setRoleModal({ isOpen: true, data: role })} className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-50 dark:bg-slate-800 rounded-xl transition-all">
+                  <Edit size={16} />
+                </button>
+                <button onClick={() => handleDelete(role.id, role.name)} className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 bg-gray-50 dark:bg-slate-800 rounded-xl transition-all">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

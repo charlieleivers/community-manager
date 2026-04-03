@@ -7,9 +7,7 @@ import {
 } from 'lucide-react';
 
 import { auth, db } from './firebase-config.js';
-import { 
-  collection, onSnapshot, doc, setDoc, deleteDoc 
-} from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 import Sidebar from './components/Sidebar';
@@ -31,7 +29,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null); 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [authView, setAuthView] = useState('login'); 
-  const [authForm, setAuthForm] = useState({ name: '', discordId: '', password: '', teamId: 't1' });
+  // ADDED: teamId and requestedRoleId to the form state
+  const [authForm, setAuthForm] = useState({ name: '', discordId: '', password: '', teamId: '', requestedRoleId: '' });
   
   const [memberModal, setMemberModal] = useState({ isOpen: false, data: null, teamId: null });
   const [teamModal, setTeamModal] = useState({ isOpen: false, data: null });
@@ -54,9 +53,12 @@ export default function App() {
   ];
 
   useEffect(() => {
-    const initAuth = async () => {
-      try { await signInAnonymously(auth); } catch (err) { console.error("Auth failed", err); }
-    };
+    if (currentUser?.darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [currentUser?.darkMode]);
+
+  useEffect(() => {
+    const initAuth = async () => { try { await signInAnonymously(auth); } catch (err) {} };
     initAuth();
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -64,7 +66,6 @@ export default function App() {
       const unsubTeams = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), (snap) => setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubRoles = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'roles'), (snap) => setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubMembers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'members'), (snap) => setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-
       return () => { unsubTeams(); unsubRoles(); unsubMembers(); };
     });
 
@@ -81,7 +82,6 @@ export default function App() {
       setCurrentUser({ id: 'superadmin', name: 'System Admin', isSystemAdmin: true, status: 'active', darkMode: true });
       return;
     }
-
     const user = members.find(m => m.discordId === authForm.discordId && m.password === authForm.password);
     if (user && user.status === 'active') setCurrentUser(user);
     else if (user && user.status === 'pending') alert("Your access request is still pending approval.");
@@ -90,11 +90,14 @@ export default function App() {
 
   const handleRequestAccess = async (e) => {
     e.preventDefault();
+    if (!authForm.teamId || !authForm.requestedRoleId) return alert("You must select a Team and a Role to request access.");
+    
     const id = `m${Date.now()}`;
     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', id);
     await setDoc(docRef, { ...authForm, id, status: 'pending', roleId: 'r_pending', customPerms: [], darkMode: true });
     alert("Request submitted! Please wait for an admin to approve you.");
     setAuthView('login');
+    setAuthForm({ name: '', discordId: '', password: '', teamId: '', requestedRoleId: '' }); // Reset
   };
 
   const handleSaveMember = async (memberData) => {
@@ -112,8 +115,7 @@ export default function App() {
 
   const togglePermission = async (targetId, permId) => {
     const isRole = roles.find(r => r.id === targetId);
-    const collectionName = isRole ? 'roles' : 'members';
-    const docRef = doc(db, 'artifacts', appId, 'public', 'data', collectionName, targetId);
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', isRole ? 'roles' : 'members', targetId);
     const targetData = isRole ? roles.find(r => r.id === targetId) : members.find(m => m.id === targetId);
     const perms = targetData?.customPerms || [];
     const newPerms = perms.includes(permId) ? perms.filter(p => p !== permId) : [...perms, permId];
@@ -124,14 +126,14 @@ export default function App() {
     const newState = !currentUser.darkMode;
     setCurrentUser({ ...currentUser, darkMode: newState });
     if (currentUser.id !== 'superadmin') {
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', currentUser.id);
-      await setDoc(docRef, { darkMode: newState }, { merge: true });
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', currentUser.id), { darkMode: newState }, { merge: true });
     }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setActiveTab('dashboard');
+    document.documentElement.classList.remove('dark');
   };
 
   if (!currentUser) {
@@ -148,7 +150,19 @@ export default function App() {
           </h2>
           <form onSubmit={authView === 'login' ? handleLogin : handleRequestAccess} className="space-y-4">
             {authView === 'request' && (
-              <input required className="w-full p-4 bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder-slate-400" placeholder="Full Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
+              <>
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder-slate-400" placeholder="Full Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
+                <div className="flex space-x-2">
+                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white" value={authForm.teamId} onChange={e => setAuthForm({...authForm, teamId: e.target.value})}>
+                    <option value="" disabled>Select Team...</option>
+                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white" value={authForm.requestedRoleId} onChange={e => setAuthForm({...authForm, requestedRoleId: e.target.value})}>
+                    <option value="" disabled>Select Role...</option>
+                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                </div>
+              </>
             )}
             <input required className="w-full p-4 bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder-slate-400" placeholder="Discord ID" value={authForm.discordId} onChange={e => setAuthForm({...authForm, discordId: e.target.value})} />
             <input required className="w-full p-4 bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder-slate-400" type="password" placeholder="Password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
@@ -166,9 +180,8 @@ export default function App() {
     );
   }
 
-  // NOTE THE ROOT WRAPPER HERE: dark:bg-[#0B0F19] dark:text-slate-200
   return (
-    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-300 ${currentUser.darkMode ? 'dark bg-[#0B0F19] text-slate-200' : 'bg-[#f8fafc] text-gray-900'}`}>
+    <div className="flex h-screen font-sans overflow-hidden transition-colors duration-300 bg-[#f8fafc] text-gray-900 dark:bg-[#0B0F19] dark:text-slate-200">
       <Sidebar 
         activeTab={activeTab} setActiveTab={setActiveTab} teams={teams} members={members}
         currentUser={currentUser} currentUserRole={currentUserRole} isGlobalAdmin={isGlobalAdmin} isSysAdmin={isSysAdmin} 
@@ -178,9 +191,9 @@ export default function App() {
       <div className="flex-1 overflow-y-auto">
         <div className="p-8 max-w-6xl mx-auto w-full">
           {activeTab === 'dashboard' && <Dashboard teams={teams} members={members} setActiveTab={setActiveTab} />}
-          {activeTab === 'teams-setup' && <TeamSetup teams={teams} setTeams={setTeams} setTeamModal={setTeamModal} />}
-          {activeTab === 'roles' && <RoleManagement roles={roles} setRoles={setRoles} setRoleModal={setRoleModal} />}
-          {activeTab === 'requests' && <AccessRequests members={members} handleApprove={(id, rid) => handleSaveMember({...members.find(m=>m.id===id), status: 'active', roleId: rid})} handleDeny={handleDeleteMember} />}
+          {activeTab === 'teams-setup' && <TeamSetup teams={teams} setTeamModal={setTeamModal} />}
+          {activeTab === 'roles' && <RoleManagement roles={roles} setRoleModal={setRoleModal} />}
+          {activeTab === 'requests' && <AccessRequests members={members} teams={teams} roles={roles} handleApprove={(id, teamId, roleId) => handleSaveMember({...members.find(m=>m.id===id), status: 'active', teamId, roleId})} handleDeny={handleDeleteMember} />}
           {activeTab === 'permissions' && <PermissionsManager roles={roles} members={members} isSysAdmin={isSysAdmin} togglePermission={togglePermission} availablePermissions={AVAILABLE_PERMISSIONS} />}
 
           {/* INDIVIDUAL TEAM VIEW */}
