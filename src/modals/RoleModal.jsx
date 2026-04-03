@@ -1,14 +1,23 @@
-import React, { useState } from 'react';
-import { X, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Check, Loader2 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase-config.js';
 
 export default function RoleModal({ roleModal, setRoleModal, availablePermissions = [] }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    scope: 'TEAM', 
-    customPerms: []
-  });
+  const [formData, setFormData] = useState({ name: '', scope: 'TEAM', customPerms: [] });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (roleModal.isOpen && roleModal.data) {
+      setFormData({
+        name: roleModal.data.name || '',
+        scope: roleModal.data.scope || 'TEAM',
+        customPerms: roleModal.data.customPerms || []
+      });
+    } else {
+      setFormData({ name: '', scope: 'TEAM', customPerms: [] });
+    }
+  }, [roleModal]);
 
   if (!roleModal.isOpen) return null;
 
@@ -23,12 +32,22 @@ export default function RoleModal({ roleModal, setRoleModal, availablePermission
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const id = roleModal.data?.id || `r${Date.now()}`;
-    const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'roles', id);
-    
-    await setDoc(docRef, { ...formData, id }, { merge: true });
-    setRoleModal({ isOpen: false, data: null });
-    setFormData({ name: '', scope: 'TEAM', customPerms: [] });
+    setIsSubmitting(true);
+
+    try {
+      const id = roleModal.data?.id || `r${Date.now()}`;
+      const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'roles', id);
+      
+      await setDoc(docRef, { ...formData, id }, { merge: true });
+      
+      setRoleModal({ isOpen: false, data: null });
+      setFormData({ name: '', scope: 'TEAM', customPerms: [] });
+    } catch (error) {
+      console.error("Firebase Save Error:", error);
+      alert(`FAILED TO SAVE TO DATABASE:\n${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -71,7 +90,13 @@ export default function RoleModal({ roleModal, setRoleModal, availablePermission
             </div>
           </div>
 
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl font-bold transition-all shadow-lg">Save Role</button>
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full flex justify-center items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl font-bold transition-all shadow-lg disabled:opacity-50"
+          >
+            {isSubmitting ? <><Loader2 size={20} className="animate-spin" /><span>Saving...</span></> : <span>Save Role</span>}
+          </button>
         </form>
       </div>
     </div>

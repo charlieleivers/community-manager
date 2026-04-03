@@ -1,24 +1,45 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Loader2 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase-config.js';
 
 export default function TeamModal({ teamModal, setTeamModal }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    description: ''
-  });
+  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // This ensures the form pre-fills if you are editing an existing team
+  useEffect(() => {
+    if (teamModal.isOpen && teamModal.data) {
+      setFormData({
+        name: teamModal.data.name || '',
+        description: teamModal.data.description || ''
+      });
+    } else {
+      setFormData({ name: '', description: '' });
+    }
+  }, [teamModal]);
 
   if (!teamModal.isOpen) return null;
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const id = teamModal.data?.id || `t${Date.now()}`;
-    const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'teams', id);
+    setIsSubmitting(true);
     
-    await setDoc(docRef, { ...formData, id }, { merge: true });
-    setTeamModal({ isOpen: false, data: null });
-    setFormData({ name: '', description: '' }); 
+    try {
+      const id = teamModal.data?.id || `t${Date.now()}`;
+      // Verify this path exactly matches your Firebase structure
+      const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'teams', id);
+      
+      await setDoc(docRef, { ...formData, id }, { merge: true });
+      
+      setTeamModal({ isOpen: false, data: null });
+      setFormData({ name: '', description: '' }); 
+    } catch (error) {
+      console.error("Firebase Save Error:", error);
+      alert(`FAILED TO SAVE TO DATABASE:\n${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -54,8 +75,12 @@ export default function TeamModal({ teamModal, setTeamModal }) {
               onChange={e => setFormData({...formData, description: e.target.value})} 
             />
           </div>
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-200 dark:shadow-none mt-4">
-            Save Team
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full flex justify-center items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl font-bold transition-all shadow-lg shadow-blue-200 dark:shadow-none mt-4 disabled:opacity-50"
+          >
+            {isSubmitting ? <><Loader2 size={20} className="animate-spin" /><span>Saving...</span></> : <span>Save Team</span>}
           </button>
         </form>
       </div>
