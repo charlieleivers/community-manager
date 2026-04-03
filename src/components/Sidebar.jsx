@@ -62,23 +62,31 @@ export default function Sidebar({ activeTab, setActiveTab, teams, members, curre
         </div>
       </div>
 
-      <div className="mt-auto p-6 border-t border-gray-100 dark:border-slate-800 space-y-4">
-        <button 
-          onClick={toggleDarkMode}
-          className="w-full flex items-center justify-between px-4 py-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-all"
-        >
-          <span className="text-sm font-bold">{currentUser.darkMode ? 'Light Mode' : 'Dark Mode'}</span>
-          {currentUser.darkMode ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
-        <div className="flex items-center space-x-3 px-4 py-2">
-          <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center font-bold text-gray-900 dark:text-white">
+      {/* FIXED BOTTOM SECTION: Profile, Dark Mode, and Logout */}
+      <div className="mt-auto p-6 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="flex items-center space-x-3 overflow-hidden">
+          <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center font-bold text-gray-900 dark:text-white shrink-0">
             {currentUser.name?.charAt(0)}
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="overflow-hidden">
             <p className="text-sm font-bold truncate text-gray-900 dark:text-white">{currentUser.name}</p>
             <p className="text-[10px] text-gray-400 dark:text-slate-500 font-mono truncate">{currentUser.discordId}</p>
           </div>
-          <button onClick={handleLogout} className="text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+        </div>
+        
+        <div className="flex items-center space-x-1 shrink-0">
+          <button 
+            onClick={toggleDarkMode} 
+            className="p-2 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800"
+            title="Toggle Dark Mode"
+          >
+            {currentUser.darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button 
+            onClick={handleLogout} 
+            className="p-2 text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800"
+            title="Logout"
+          >
             <LogOut size={18} />
           </button>
         </div>
