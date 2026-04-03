@@ -3,13 +3,11 @@ import {
   Users, Shield, Settings, LayoutDashboard, Plus, 
   Trash2, Edit, ChevronUp, ChevronDown, Star,
   MoveRight, Scissors, Merge, Check, X,
-  AlertCircle, Lock, Key, LogOut, UserCheck, Moon, Sun, Sliders, Terminal
+  AlertCircle, Lock, Key, LogOut, UserCheck, Moon, Sun, Sliders, Terminal, Copy
 } from 'lucide-react';
 
 import { auth, db } from './firebase-config.js';
-import { 
-  collection, onSnapshot, doc, setDoc, deleteDoc 
-} from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 import Sidebar from './components/Sidebar';
@@ -30,7 +28,9 @@ export default function App() {
   const [members, setMembers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null); 
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [authView, setAuthView] = useState('login'); 
+  
+  // Updated Auth Flow States
+  const [authView, setAuthView] = useState('login'); // 'login', 'request_step1', 'request_step2'
   const [authForm, setAuthForm] = useState({ name: '', discordId: '', password: '', teamId: '', requestedRoleId: '' });
   
   const [memberModal, setMemberModal] = useState({ isOpen: false, data: null, teamId: null });
@@ -44,17 +44,21 @@ export default function App() {
   const appId = "community-manager";
 
   const AVAILABLE_PERMISSIONS = [
-    { id: 'MANAGE_TEAMS', label: 'Team Architecture (Merge/Split/Create)' },
-    { id: 'MANAGE_ROLES', label: 'Role Hierarchy & Levels' },
-    { id: 'REVIEW_REQUESTS', label: 'Approve/Deny Pending Members' },
-    { id: 'MANAGE_USERS', label: 'User Overrides & Role Assignment' },
-    { id: 'MANAGE_MENTORS', label: 'Assign Mentor Badges' },
-    { id: 'VIEW_AUDIT_LOGS', label: 'View System Audit Logs' },
-    { id: 'MANAGE_INTEGRATIONS', label: 'Database & Webhook Config' },
-    { id: 'SYSTEM_SETTINGS', label: 'Global System Overrides' },
-    { id: 'EXPORT_DATA', label: 'Export Community Reports' },
-    { id: 'BROADCAST_ANNOUNCE', label: 'Send System-wide Announcements' },
-    { id: 'MANAGE_FINANCES', label: 'Manage Team Budgets/Payouts' }
+    { id: 'EDIT_ASSIGNED_TEAM', label: 'Edit Assigned Team' },
+    { id: 'EDIT_ALL_TEAMS', label: 'Edit All Teams' },
+    { id: 'CREATE_TEAM', label: 'Create Team' },
+    { id: 'DELETE_TEAM', label: 'Delete Team' },
+    { id: 'CREATE_ROLE', label: 'Create Role' },
+    { id: 'EDIT_ROLE', label: 'Edit Role' },
+    { id: 'DELETE_ROLE', label: 'Remove Role' },
+    { id: 'PROMOTE_ASSIGNED', label: 'Promote Assigned Team Member' },
+    { id: 'DEMOTE_ASSIGNED', label: 'Demote Assigned Team Member' },
+    { id: 'REMOVE_ASSIGNED', label: 'Remove Assigned Team User' },
+    { id: 'PROMOTE_ALL', label: 'Promote All Team Member' },
+    { id: 'DEMOTE_ALL', label: 'Demote All Team Member' },
+    { id: 'REMOVE_ALL', label: 'Remove All Team User' },
+    { id: 'APPROVE_REQUESTS_ASSIGNED', label: 'Approve Requests (Assigned Team)' },
+    { id: 'APPROVE_REQUESTS_ALL', label: 'Approve Requests (All Teams)' }
   ];
 
   // --- DARK MODE ENGINE ---
@@ -140,7 +144,7 @@ export default function App() {
     const user = members.find(m => m.discordId === authForm.discordId && m.password === authForm.password);
     if (user && user.status === 'active') setCurrentUser(user);
     else if (user && user.status === 'pending') alert("Your access request is still pending approval.");
-    else alert("Invalid credentials.");
+    else alert("Invalid credentials or Discord ID not found.");
   };
 
   const handleRequestAccess = async (e) => {
@@ -150,7 +154,7 @@ export default function App() {
       const id = `m${Date.now()}`;
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', id);
       await setDoc(docRef, { ...authForm, id, status: 'pending', roleId: 'r_pending', customPerms: [], darkMode: true });
-      alert("Request submitted! Please wait for an admin to approve you.");
+      alert("Request submitted! Please wait for an admin to approve your Discord connection.");
       setAuthView('login');
       setAuthForm({ name: '', discordId: '', password: '', teamId: '', requestedRoleId: '' });
     } catch (error) {
@@ -161,11 +165,9 @@ export default function App() {
 
   const handleSaveMember = async (memberData) => {
     try {
-      console.log("Attempting to save member...", memberData);
       const id = memberData.id || `m${Date.now()}`;
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', id);
       await setDoc(docRef, { ...memberData, id, status: memberData.status || 'active' }, { merge: true });
-      console.log("Member saved successfully!");
       setMemberModal({ isOpen: false, data: null, teamId: null });
     } catch (error) {
       console.error("Save Member Error:", error.message);
@@ -174,10 +176,8 @@ export default function App() {
 
   const handleDeleteMember = async (memberId) => {
     try {
-      console.log("Attempting to delete member...", memberId);
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', memberId);
       await deleteDoc(docRef);
-      console.log("Member deleted successfully!");
       if (currentUser?.id === memberId) handleLogout();
     } catch (error) {
       console.error("Delete Member Error:", error.message);
@@ -192,7 +192,6 @@ export default function App() {
       const perms = targetData?.customPerms || [];
       const newPerms = perms.includes(permId) ? perms.filter(p => p !== permId) : [...perms, permId];
       await setDoc(docRef, { customPerms: newPerms }, { merge: true });
-      console.log(`Permission ${permId} toggled for ${targetId}`);
     } catch (error) {
       console.error("Toggle Permission Error:", error.message);
     }
@@ -217,20 +216,9 @@ export default function App() {
     document.documentElement.classList.remove('dark');
   };
 
-  const runDiagnosticTest = async () => {
-    console.log("--- RUNNING FIREBASE DIAGNOSTIC TEST ---");
-    try {
-      const testId = `test_${Date.now()}`;
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'diagnostic', testId);
-      console.log("Attempting to write to database path:", docRef.path);
-      await setDoc(docRef, { status: "Write Successful", time: new Date().toISOString() });
-      console.log("SUCCESS: Database is unlocked and accepting writes.");
-      await deleteDoc(docRef);
-      console.log("SUCCESS: Cleaned up diagnostic document.");
-    } catch (error) {
-      console.error("DIAGNOSTIC FAILED:", error.message);
-      console.warn("SOLUTION: Go to Firebase Console -> Firestore Database -> Rules. Ensure they are set to 'allow read, write: if true;'");
-    }
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    alert(`Copied Discord ID to clipboard: ${text}`);
   };
 
   // --- RENDER LOGIC ---
@@ -239,39 +227,82 @@ export default function App() {
       <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center p-4">
         <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl w-full max-w-md">
           <div className="flex justify-center mb-6">
-            <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-900/50">
+            <div className="bg-[#5865F2] p-4 rounded-2xl text-white shadow-lg shadow-[#5865F2]/30">
               <Shield size={32} />
             </div>
           </div>
-          <h2 className="text-2xl font-black mb-6 text-center text-white tracking-tight">
-            {authView === 'login' ? 'CommUnity Portal' : 'Join Management'}
+          
+          <h2 className="text-2xl font-black mb-2 text-center text-white tracking-tight">
+            {authView === 'login' && 'CommUnity Portal'}
+            {authView === 'request_step1' && 'Request Access'}
+            {authView === 'request_step2' && 'Link Discord'}
           </h2>
-          <form onSubmit={authView === 'login' ? handleLogin : handleRequestAccess} className="space-y-4">
-            {authView === 'request' && (
+          <p className="text-center text-slate-400 text-sm mb-6">
+            {authView === 'login' && 'Sign in to access the management tools.'}
+            {authView === 'request_step1' && 'Step 1: Tell us where you belong.'}
+            {authView === 'request_step2' && 'Step 2: Authenticate your identity.'}
+          </p>
+
+          <form onSubmit={authView === 'login' ? handleLogin : authView === 'request_step2' ? handleRequestAccess : (e) => { e.preventDefault(); setAuthView('request_step2'); }} className="space-y-4">
+            
+            {/* LOGIN VIEW */}
+            {authView === 'login' && (
               <>
-                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400" placeholder="Full Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="Discord ID (or Admin User)" value={authForm.discordId} onChange={e => setAuthForm({...authForm, discordId: e.target.value})} />
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" type="password" placeholder="Password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
+                <button type="submit" className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-4 rounded-xl font-bold shadow-lg transition-all flex justify-center items-center space-x-2">
+                  <span>Sign In</span>
+                </button>
+              </>
+            )}
+
+            {/* REQUEST STEP 1: INFO */}
+            {authView === 'request_step1' && (
+              <>
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="Real Full Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
                 <div className="flex space-x-2">
-                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white" value={authForm.teamId} onChange={e => setAuthForm({...authForm, teamId: e.target.value})}>
+                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white focus:ring-2 focus:ring-[#5865F2]" value={authForm.teamId} onChange={e => setAuthForm({...authForm, teamId: e.target.value})}>
                     <option value="" disabled>Select Team...</option>
                     {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white" value={authForm.requestedRoleId} onChange={e => setAuthForm({...authForm, requestedRoleId: e.target.value})}>
+                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white focus:ring-2 focus:ring-[#5865F2]" value={authForm.requestedRoleId} onChange={e => setAuthForm({...authForm, requestedRoleId: e.target.value})}>
                     <option value="" disabled>Select Role...</option>
                     {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold shadow-lg transition-all">
+                  Next Step
+                </button>
               </>
             )}
-            <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400" placeholder="Discord ID" value={authForm.discordId} onChange={e => setAuthForm({...authForm, discordId: e.target.value})} />
-            <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400" type="password" placeholder="Password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
-            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold shadow-lg transition-all">
-              {authView === 'login' ? 'Enter System' : 'Submit Request'}
-            </button>
+
+            {/* REQUEST STEP 2: DISCORD MOCK */}
+            {authView === 'request_step2' && (
+              <div className="space-y-4">
+                <div className="p-4 bg-[#5865F2]/10 border border-[#5865F2]/30 rounded-xl">
+                  <p className="text-xs text-[#5865F2] font-bold uppercase mb-2">Simulated OAuth Window</p>
+                  <p className="text-sm text-slate-300">In a live environment, this redirects to Discord. For now, enter your Discord ID and a secure password manually.</p>
+                </div>
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="Discord ID (e.g., username#1234)" value={authForm.discordId} onChange={e => setAuthForm({...authForm, discordId: e.target.value})} />
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" type="password" placeholder="Create a temporary password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
+                
+                <button type="submit" className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-4 rounded-xl font-bold shadow-lg shadow-[#5865F2]/20 transition-all flex justify-center items-center space-x-2">
+                  <span>Connect Discord & Submit</span>
+                </button>
+              </div>
+            )}
           </form>
-          <div className="mt-6 text-center">
-            <button onClick={() => setAuthView(authView === 'login' ? 'request' : 'login')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
-              {authView === 'login' ? "Request Management Access" : "Back to Login"}
-            </button>
+
+          <div className="mt-6 text-center border-t border-slate-800 pt-6">
+            {authView === 'login' ? (
+              <button onClick={() => setAuthView('request_step1')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
+                Need management access? Apply here.
+              </button>
+            ) : (
+              <button onClick={() => setAuthView('login')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
+                Back to Login
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -294,6 +325,7 @@ export default function App() {
           {activeTab === 'requests' && <AccessRequests members={members} teams={teams} roles={roles} handleApprove={(id, teamId, roleId) => handleSaveMember({...members.find(m=>m.id===id), status: 'active', teamId, roleId})} handleDeny={handleDeleteMember} />}
           {activeTab === 'permissions' && <PermissionsManager roles={roles} members={members} isSysAdmin={isSysAdmin} togglePermission={togglePermission} availablePermissions={AVAILABLE_PERMISSIONS} />}
 
+          {/* INDIVIDUAL TEAM VIEW - WITH UPGRADED ADMIN DISCORD VISIBILITY */}
           {!['dashboard', 'teams-setup', 'roles', 'requests', 'permissions'].includes(activeTab) && (
              <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-800 transition-colors animate-fade-in">
                 <div className="flex justify-between items-center mb-8">
@@ -305,29 +337,60 @@ export default function App() {
                     <Plus size={20} /> <span>Add Member</span>
                   </button>
                 </div>
+
+                <div className="grid gap-4">
+                  {members.filter(m => m.teamId === activeTab && m.status === 'active').map(member => (
+                    <div key={member.id} className="flex justify-between items-center p-5 bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 group hover:border-blue-200 dark:hover:border-slate-600 transition-all">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-white dark:bg-slate-700 rounded-full flex items-center justify-center font-bold text-blue-600 dark:text-blue-400 border border-gray-100 dark:border-slate-600">
+                          {member.name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="flex items-center space-x-3">
+                            <h4 className="font-bold text-gray-900 dark:text-white">{member.name}</h4>
+                            <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs px-2 py-0.5 rounded font-bold">
+                              {roles.find(r => r.id === member.roleId)?.name || 'No Role'}
+                            </span>
+                          </div>
+                          
+                          {/* UPGRADED DISCORD ID VIEW */}
+                          <div className="flex items-center space-x-2 mt-1">
+                            <div className="px-2 py-1 bg-[#5865F2]/10 border border-[#5865F2]/20 rounded text-xs font-mono text-[#5865F2] font-semibold flex items-center">
+                              {member.discordId}
+                            </div>
+                            <button 
+                              onClick={() => copyToClipboard(member.discordId)}
+                              className="text-gray-400 hover:text-[#5865F2] transition-colors p-1"
+                              title="Copy Discord ID"
+                            >
+                              <Copy size={14} />
+                            </button>
+                          </div>
+
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button onClick={() => setMemberModal({ isOpen: true, data: member, teamId: activeTab })} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all">
+                          <Edit size={18} />
+                        </button>
+                        <button onClick={() => { if(window.confirm(`Remove ${member.name}?`)) handleDeleteMember(member.id); }} className="p-2 text-gray-400 hover:text-red-600 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {members.filter(m => m.teamId === activeTab && m.status === 'active').length === 0 && (
+                     <p className="text-center p-8 text-gray-400 dark:text-slate-500 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700">No members in this team yet.</p>
+                  )}
+                </div>
              </div>
           )}
         </div>
       </div>
 
-      {/* GLOBAL DEBUG CONSOLE */}
       {currentUser.isDebug && (
         <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/95 border-t-4 border-red-600 text-green-400 font-mono flex flex-col z-[100] shadow-2xl">
-          <div className="bg-red-600 text-white px-4 py-2 flex justify-between items-center font-bold text-sm shrink-0">
-            <div className="flex items-center space-x-2"><Terminal size={16} /> <span>SYSTEM DEBUG CONSOLE</span></div>
-            <div className="flex space-x-4">
-              <button onClick={runDiagnosticTest} className="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200 transition-colors">RUN FIREBASE TEST</button>
-              <button onClick={() => setLogs([])} className="hover:text-red-200">CLEAR LOGS</button>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 text-xs space-y-1">
-            {logs.map((log, i) => (
-              <div key={i} className={`${log.type === 'ERROR' ? 'text-red-400' : log.type === 'WARN' ? 'text-yellow-400' : 'text-green-400'}`}>
-                <span className="opacity-50">[{log.time}]</span> <span className="font-bold">{log.type}:</span> {log.msg}
-              </div>
-            ))}
-            <div ref={logsEndRef} />
-          </div>
+          {/* ... Debug Console ... */}
         </div>
       )}
 

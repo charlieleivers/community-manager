@@ -1,84 +1,115 @@
 import React, { useState } from 'react';
-import { Sliders, Lock, Check } from 'lucide-react';
+import { Key, Shield, User, Check } from 'lucide-react';
 
 export default function PermissionsManager({ roles, members, isSysAdmin, togglePermission, availablePermissions }) {
-  const [targetId, setTargetId] = useState('');
-  
-  if (!isSysAdmin) return (
-    <div className="p-12 text-center text-gray-400">
-      <Lock size={48} className="mx-auto mb-4 opacity-20" />
-      <p>System Admin Required to manage granular overrides.</p>
-    </div>
-  );
+  const [activeTab, setActiveTab] = useState('roles');
+  const [selectedTargetId, setSelectedTargetId] = useState(null);
 
-  const target = roles.find(r => r.id === targetId) || members.find(m => m.id === targetId);
-  const perms = target?.customPerms || [];
+  // Switch between managing Roles or specific Members
+  const listItems = activeTab === 'roles' ? roles : members.filter(m => m.status === 'active');
+  const selectedTarget = listItems.find(item => item.id === selectedTargetId) || listItems[0];
+
+  if (!isSysAdmin) {
+    return (
+      <div className="p-12 text-center bg-red-50 dark:bg-red-900/10 rounded-3xl border border-red-100 dark:border-red-900/30">
+        <h3 className="text-xl font-bold text-red-600 dark:text-red-400">System Admin Access Required</h3>
+        <p className="text-red-500/80 mt-2">You do not have clearance to modify core system permissions.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-        <Sliders className="mr-3 text-red-500" /> Advanced Overrides
-      </h2>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Selection Sidebar */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm h-fit">
-           <label className="block text-xs font-bold text-gray-400 uppercase mb-2 tracking-widest">Select Target</label>
-           <select 
-             className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all" 
-             value={targetId} 
-             onChange={e => setTargetId(e.target.value)}
-           >
-             <option value="">Select Role/User...</option>
-             <optgroup label="Global Roles">
-               {roles.map(r => <option key={r.id} value={r.id}>{r.name} (Lvl {r.level})</option>)}
-             </optgroup>
-             <optgroup label="Active Users">
-               {members.filter(m => m.status === 'active').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-             </optgroup>
-           </select>
-           <p className="mt-4 text-xs text-gray-400 leading-relaxed italic">
-             Note: Permissions assigned to roles apply to all members of that role. Individual user assignments act as overrides.
-           </p>
+    <div className="animate-fade-in space-y-8">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white">Permissions</h2>
+          <p className="text-gray-500 dark:text-slate-400 mt-2 font-medium">Control system access levels and overrides.</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-6">
+        
+        {/* Left Column: Selection List */}
+        <div className="w-full lg:w-1/3 bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-[600px]">
+          <div className="flex border-b border-gray-100 dark:border-slate-800">
+            <button 
+              onClick={() => { setActiveTab('roles'); setSelectedTargetId(null); }}
+              className={`flex-1 flex items-center justify-center space-x-2 p-4 font-bold transition-colors ${activeTab === 'roles' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800/50'}`}
+            >
+              <Shield size={18} /> <span>Roles</span>
+            </button>
+            <button 
+              onClick={() => { setActiveTab('members'); setSelectedTargetId(null); }}
+              className={`flex-1 flex items-center justify-center space-x-2 p-4 font-bold transition-colors ${activeTab === 'members' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800/50'}`}
+            >
+              <User size={18} /> <span>Overrides</span>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {listItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => setSelectedTargetId(item.id)}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${selectedTarget?.id === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-none' : 'bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 border border-transparent dark:border-slate-700'}`}
+              >
+                <span className="font-bold truncate">{item.name}</span>
+                {item.customPerms?.length > 0 && (
+                  <span className={`text-xs px-2 py-1 rounded-md font-bold ${selectedTarget?.id === item.id ? 'bg-blue-500 text-white' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+                    {item.customPerms.length}
+                  </span>
+                )}
+              </button>
+            ))}
+            {listItems.length === 0 && (
+              <p className="text-center text-sm text-gray-400 dark:text-slate-500 mt-8">No {activeTab} found.</p>
+            )}
+          </div>
         </div>
 
-        {/* Permissions Grid */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          {target ? (
-            <div className="space-y-3">
-              <div className="mb-6">
-                <h3 className="font-bold text-gray-800">Adjusting: <span className="text-blue-600">{target.name}</span></h3>
+        {/* Right Column: Permission Toggles */}
+        <div className="w-full lg:w-2/3 bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 lg:p-8 flex flex-col h-[600px]">
+          {selectedTarget ? (
+            <>
+              <div className="mb-8">
+                <h3 className="text-2xl font-black text-gray-900 dark:text-white flex items-center space-x-3">
+                  <Key size={24} className="text-blue-500" />
+                  <span>{selectedTarget.name}</span>
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-slate-400 mt-2">
+                  {activeTab === 'roles' ? 'These permissions apply to everyone with this role.' : 'These are specific user overrides that stack on top of their role permissions.'}
+                </p>
               </div>
-              
-              <div className="grid gap-2">
-                {availablePermissions.map(p => (
-                  <div 
-                    key={p.id} 
-                    className={`flex justify-between items-center p-4 rounded-xl border transition-all ${
-                      perms.includes(p.id) ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100 hover:border-gray-200'
-                    }`}
-                  >
-                    <div className="flex flex-col">
-                      <span className={`font-bold text-sm ${perms.includes(p.id) ? 'text-red-700' : 'text-gray-700'}`}>{p.label}</span>
-                      <span className="text-[10px] font-mono text-gray-400 mt-0.5">{p.id}</span>
-                    </div>
-                    <button 
-                      onClick={() => togglePermission(targetId, p.id)} 
-                      className={`w-12 h-6 rounded-full transition-all relative ${perms.includes(p.id) ? 'bg-red-500 shadow-inner' : 'bg-gray-200'}`}
+
+              <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                {availablePermissions.map(perm => {
+                  const hasPerm = selectedTarget.customPerms?.includes(perm.id);
+                  return (
+                    <div 
+                      key={perm.id} 
+                      onClick={() => togglePermission(selectedTarget.id, perm.id)}
+                      className={`flex items-center justify-between p-5 rounded-2xl cursor-pointer border-2 transition-all group ${hasPerm ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 hover:border-gray-300 dark:hover:border-slate-600'}`}
                     >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${perms.includes(p.id) ? 'left-7' : 'left-1'}`} />
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <h4 className={`font-bold ${hasPerm ? 'text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-slate-200'}`}>{perm.label}</h4>
+                        <p className={`text-xs mt-1 font-mono ${hasPerm ? 'text-blue-500/70 dark:text-blue-400/70' : 'text-gray-400 dark:text-slate-500'}`}>{perm.id}</p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${hasPerm ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 dark:bg-slate-700 text-transparent group-hover:bg-gray-300 dark:group-hover:bg-slate-600'}`}>
+                        <Check size={14} strokeWidth={4} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400 opacity-40">
-               <Sliders size={64} className="mb-4" />
-               <p className="font-medium">Choose a role or member to manage system-wide permissions.</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 dark:text-slate-500">
+              <Key size={48} className="mb-4 opacity-50" />
+              <p className="font-bold">Select a target to configure permissions.</p>
             </div>
           )}
         </div>
+
       </div>
     </div>
   );
