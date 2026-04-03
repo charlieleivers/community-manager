@@ -3,7 +3,7 @@ import {
   Users, Shield, Settings, LayoutDashboard, Plus, 
   Trash2, Edit, ChevronUp, ChevronDown, Star,
   MoveRight, Scissors, Merge, Check, X,
-  AlertCircle, Lock, Key, LogOut, UserCheck, Moon, Sun, Sliders, Terminal, Copy
+  AlertCircle, Lock, Key, LogOut, UserCheck, Moon, Sun, Sliders, Terminal, Copy, MapPin
 } from 'lucide-react';
 
 import { auth, db } from './firebase-config.js';
@@ -29,15 +29,14 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null); 
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Updated Auth Flow States
-  const [authView, setAuthView] = useState('login'); // 'login', 'request_step1', 'request_step2'
-  const [authForm, setAuthForm] = useState({ name: '', discordId: '', password: '', teamId: '', requestedRoleId: '' });
+  const [authView, setAuthView] = useState('login'); 
+  // ADDED cityId to the authForm state
+  const [authForm, setAuthForm] = useState({ name: '', cityId: '', discordId: '', password: '', teamId: '', requestedRoleId: '' });
   
   const [memberModal, setMemberModal] = useState({ isOpen: false, data: null, teamId: null });
   const [teamModal, setTeamModal] = useState({ isOpen: false, data: null });
   const [roleModal, setRoleModal] = useState({ isOpen: false, data: null });
 
-  // Debug State
   const [logs, setLogs] = useState([]);
   const logsEndRef = useRef(null);
 
@@ -63,8 +62,13 @@ export default function App() {
 
   // --- DARK MODE ENGINE ---
   useEffect(() => {
-    if (currentUser?.darkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    if (currentUser?.darkMode) {
+      document.documentElement.classList.add('dark');
+      console.log("DEBUG: DARK MODE APPLIED TO HTML TAG");
+    } else {
+      document.documentElement.classList.remove('dark');
+      console.log("DEBUG: DARK MODE REMOVED FROM HTML TAG");
+    }
   }, [currentUser?.darkMode]);
 
   // --- DEBUG LOGGER INTERCEPTOR ---
@@ -80,7 +84,7 @@ export default function App() {
       console.error = (...args) => { setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), type: 'ERROR', msg: formatArgs(args) }]); originalError(...args); };
       console.warn = (...args) => { setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), type: 'WARN', msg: formatArgs(args) }]); originalWarn(...args); };
 
-      console.log("Debug Mode Initialized. Intercepting all logs...");
+      console.log("Debug Mode Initialized.");
 
       return () => {
         console.log = originalLog;
@@ -90,34 +94,26 @@ export default function App() {
     }
   }, [currentUser?.isDebug]);
 
-  // Auto-scroll debug console
   useEffect(() => {
     if (logsEndRef.current) logsEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
   // --- FIREBASE INIT ---
   useEffect(() => {
-    const initAuth = async () => { try { await signInAnonymously(auth); console.log("Firebase Auth Anonymous Login Success"); } catch (err) { console.error("Firebase Auth failed:", err.message); } };
+    const initAuth = async () => { try { await signInAnonymously(auth); } catch (err) {} };
     initAuth();
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        console.warn("No authenticated user detected by Firebase yet.");
-        return;
-      }
-      console.log("Firebase User Authenticated. Attaching database listeners...");
+      if (!user) return;
       
       const unsubTeams = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), 
-        (snap) => { console.log(`Fetched ${snap.docs.length} teams`); setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
-        (error) => console.error("Teams Sync Error:", error.message)
+        (snap) => setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() })))
       );
       const unsubRoles = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'roles'), 
-        (snap) => { console.log(`Fetched ${snap.docs.length} roles`); setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
-        (error) => console.error("Roles Sync Error:", error.message)
+        (snap) => setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() })))
       );
       const unsubMembers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'members'), 
-        (snap) => { console.log(`Fetched ${snap.docs.length} members`); setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
-        (error) => console.error("Members Sync Error:", error.message)
+        (snap) => setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
       );
       
       return () => { unsubTeams(); unsubRoles(); unsubMembers(); };
@@ -156,7 +152,7 @@ export default function App() {
       await setDoc(docRef, { ...authForm, id, status: 'pending', roleId: 'r_pending', customPerms: [], darkMode: true });
       alert("Request submitted! Please wait for an admin to approve your Discord connection.");
       setAuthView('login');
-      setAuthForm({ name: '', discordId: '', password: '', teamId: '', requestedRoleId: '' });
+      setAuthForm({ name: '', cityId: '', discordId: '', password: '', teamId: '', requestedRoleId: '' });
     } catch (error) {
       console.error("Access Request Failed:", error.message);
       alert("Failed to send request. Check your debug console if active.");
@@ -218,7 +214,7 @@ export default function App() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    alert(`Copied Discord ID to clipboard: ${text}`);
+    alert(`Copied to clipboard: ${text}`);
   };
 
   // --- RENDER LOGIC ---
@@ -239,7 +235,7 @@ export default function App() {
           </h2>
           <p className="text-center text-slate-400 text-sm mb-6">
             {authView === 'login' && 'Sign in to access the management tools.'}
-            {authView === 'request_step1' && 'Step 1: Tell us where you belong.'}
+            {authView === 'request_step1' && 'Step 1: Identify your City and Role.'}
             {authView === 'request_step2' && 'Step 2: Authenticate your identity.'}
           </p>
 
@@ -256,10 +252,13 @@ export default function App() {
               </>
             )}
 
-            {/* REQUEST STEP 1: INFO */}
+            {/* REQUEST STEP 1: CITY & ROLE INFO */}
             {authView === 'request_step1' && (
               <>
-                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="Real Full Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
+                <div className="flex space-x-2">
+                  <input required className="w-2/3 p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="City Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
+                  <input required className="w-1/3 p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="City ID" value={authForm.cityId} onChange={e => setAuthForm({...authForm, cityId: e.target.value})} />
+                </div>
                 <div className="flex space-x-2">
                   <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white focus:ring-2 focus:ring-[#5865F2]" value={authForm.teamId} onChange={e => setAuthForm({...authForm, teamId: e.target.value})}>
                     <option value="" disabled>Select Team...</option>
@@ -325,7 +324,7 @@ export default function App() {
           {activeTab === 'requests' && <AccessRequests members={members} teams={teams} roles={roles} handleApprove={(id, teamId, roleId) => handleSaveMember({...members.find(m=>m.id===id), status: 'active', teamId, roleId})} handleDeny={handleDeleteMember} />}
           {activeTab === 'permissions' && <PermissionsManager roles={roles} members={members} isSysAdmin={isSysAdmin} togglePermission={togglePermission} availablePermissions={AVAILABLE_PERMISSIONS} />}
 
-          {/* INDIVIDUAL TEAM VIEW - WITH UPGRADED ADMIN DISCORD VISIBILITY */}
+          {/* INDIVIDUAL TEAM VIEW - WITH UPGRADED CITY UI */}
           {!['dashboard', 'teams-setup', 'roles', 'requests', 'permissions'].includes(activeTab) && (
              <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-slate-800 transition-colors animate-fade-in">
                 <div className="flex justify-between items-center mb-8">
@@ -348,12 +347,16 @@ export default function App() {
                         <div>
                           <div className="flex items-center space-x-3">
                             <h4 className="font-bold text-gray-900 dark:text-white">{member.name}</h4>
+                            {member.cityId && (
+                              <span className="flex items-center space-x-1 text-xs text-gray-500 dark:text-slate-400 font-mono">
+                                <MapPin size={12} /> <span>ID: {member.cityId}</span>
+                              </span>
+                            )}
                             <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs px-2 py-0.5 rounded font-bold">
                               {roles.find(r => r.id === member.roleId)?.name || 'No Role'}
                             </span>
                           </div>
                           
-                          {/* UPGRADED DISCORD ID VIEW */}
                           <div className="flex items-center space-x-2 mt-1">
                             <div className="px-2 py-1 bg-[#5865F2]/10 border border-[#5865F2]/20 rounded text-xs font-mono text-[#5865F2] font-semibold flex items-center">
                               {member.discordId}
@@ -390,7 +393,20 @@ export default function App() {
 
       {currentUser.isDebug && (
         <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/95 border-t-4 border-red-600 text-green-400 font-mono flex flex-col z-[100] shadow-2xl">
-          {/* ... Debug Console ... */}
+          <div className="bg-red-600 text-white px-4 py-2 flex justify-between items-center font-bold text-sm shrink-0">
+            <div className="flex items-center space-x-2"><Terminal size={16} /> <span>SYSTEM DEBUG CONSOLE</span></div>
+            <div className="flex space-x-4">
+              <button onClick={() => setLogs([])} className="hover:text-red-200">CLEAR LOGS</button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 text-xs space-y-1">
+            {logs.map((log, i) => (
+              <div key={i} className={`${log.type === 'ERROR' ? 'text-red-400' : log.type === 'WARN' ? 'text-yellow-400' : 'text-green-400'}`}>
+                <span className="opacity-50">[{log.time}]</span> <span className="font-bold">{log.type}:</span> {log.msg}
+              </div>
+            ))}
+            <div ref={logsEndRef} />
+          </div>
         </div>
       )}
 
