@@ -9,7 +9,7 @@ import {
 import { auth, db } from './firebase-config.js';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-
+import { OAuthProvider, signInWithPopup } from "firebase/auth";
 import Sidebar from './components/Sidebar';
 import Dashboard from './views/Dashboard';
 import TeamSetup from './views/TeamSetup';
@@ -127,6 +127,45 @@ export default function App() {
   const isSysAdmin = currentUser?.isSystemAdmin;
 
   // --- HANDLERS ---
+  const handleDiscordLogin = async () => {
+    console.log("--- DISCORD AUTH INITIATED ---");
+    
+    // This tells Firebase we want to use Discord
+    const provider = new OAuthProvider('oidc.discord');
+    
+    try {
+      // 1. Open the Discord Popup
+      const result = await signInWithPopup(auth, provider);
+      const discordUser = result.user;
+      
+      // 2. Get the unique Discord ID from the login
+      const discordUID = discordUser.providerData[0].uid;
+      console.log("Discord UID received:", discordUID);
+
+      // 3. Look for a matching member in your 'members' state
+      // We check if the Discord ID they registered with matches the one they just logged in with
+      const match = members.find(m => m.discordId === discordUID && m.status === 'active');
+
+      if (match) {
+        console.log("Match found! Logging in as:", match.name);
+        setCurrentUser(match);
+      } else {
+        console.warn("No active account found for this Discord ID.");
+        alert("Access Denied: This Discord account is not linked to an approved manager profile.");
+        // Log them out of Firebase so they can try a different account if needed
+        await auth.signOut();
+      }
+    } catch (error) {
+      console.error("Discord Auth Error:", error.message);
+      
+      // If you haven't set up the Firebase Console yet, this error will trigger:
+      if (error.code === 'auth/operation-not-allowed') {
+        alert("Discord Login is not yet enabled in your Firebase Console. See the 'Admin Login' to bypass.");
+      } else {
+        alert(`Discord Login Failed: ${error.message}`);
+      }
+    }
+  };
   const handleLogin = (e) => {
     e.preventDefault();
     if (authForm.discordId === 'debug' && authForm.password === 'debug') {
@@ -218,10 +257,11 @@ export default function App() {
   };
 
   // --- RENDER LOGIC ---
+  // --- UPDATED LOGIN RENDER ---
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center p-4">
-        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl w-full max-w-md">
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl w-full max-w-md animate-fade-in">
           <div className="flex justify-center mb-6">
             <div className="bg-[#5865F2] p-4 rounded-2xl text-white shadow-lg shadow-[#5865F2]/30">
               <Shield size={32} />
@@ -230,77 +270,88 @@ export default function App() {
           
           <h2 className="text-2xl font-black mb-2 text-center text-white tracking-tight">
             {authView === 'login' && 'CommUnity Portal'}
+            {authView === 'admin_login' && 'Admin Override'}
             {authView === 'request_step1' && 'Request Access'}
-            {authView === 'request_step2' && 'Link Discord'}
+            {authView === 'request_step2' && 'Link Discord Identity'}
           </h2>
-          <p className="text-center text-slate-400 text-sm mb-6">
-            {authView === 'login' && 'Sign in to access the management tools.'}
-            {authView === 'request_step1' && 'Step 1: Identify your City and Role.'}
-            {authView === 'request_step2' && 'Step 2: Authenticate your identity.'}
-          </p>
 
-          <form onSubmit={authView === 'login' ? handleLogin : authView === 'request_step2' ? handleRequestAccess : (e) => { e.preventDefault(); setAuthView('request_step2'); }} className="space-y-4">
-            
-            {/* LOGIN VIEW */}
+          <div className="space-y-4 mt-6">
+            {/* INITIAL CHOICE VIEW */}
             {authView === 'login' && (
               <>
-                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="Discord ID (or Admin User)" value={authForm.discordId} onChange={e => setAuthForm({...authForm, discordId: e.target.value})} />
-                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" type="password" placeholder="Password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
-                <button type="submit" className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-4 rounded-xl font-bold shadow-lg transition-all flex justify-center items-center space-x-2">
-                  <span>Sign In</span>
+                <button 
+                  onClick={handleDiscordLogin}
+                  className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-4 rounded-xl font-bold shadow-lg flex justify-center items-center space-x-3 transition-all"
+                >
+                  <img src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" width="24" alt="Discord" />
+                  <span>Login with Discord</span>
                 </button>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={() => setAuthView('request_step1')}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 p-4 rounded-xl font-bold text-sm transition-all border border-slate-700"
+                  >
+                    Request Access
+                  </button>
+                  <button 
+                    onClick={() => setAuthView('admin_login')}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 p-4 rounded-xl font-bold text-sm transition-all border border-slate-700"
+                  >
+                    Admin Login
+                  </button>
+                </div>
               </>
             )}
 
-            {/* REQUEST STEP 1: CITY & ROLE INFO */}
+            {/* ADMIN LOGIN VIEW */}
+            {authView === 'admin_login' && (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500" placeholder="Admin Username" value={authForm.discordId} onChange={e => setAuthForm({...authForm, discordId: e.target.value})} />
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500" type="password" placeholder="Password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold shadow-lg transition-all">
+                  Sign In as Admin
+                </button>
+                <button onClick={() => setAuthView('login')} className="w-full text-slate-500 text-xs font-bold uppercase tracking-widest">Cancel</button>
+              </form>
+            )}
+
+            {/* REQUEST STEP 1: CITY INFO */}
             {authView === 'request_step1' && (
-              <>
+              <form onSubmit={(e) => { e.preventDefault(); setAuthView('request_step2'); }} className="space-y-4">
                 <div className="flex space-x-2">
-                  <input required className="w-2/3 p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="City Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
-                  <input required className="w-1/3 p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="City ID" value={authForm.cityId} onChange={e => setAuthForm({...authForm, cityId: e.target.value})} />
+                  <input required className="w-2/3 p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400" placeholder="City Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
+                  <input required className="w-1/3 p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400" placeholder="City ID" value={authForm.cityId} onChange={e => setAuthForm({...authForm, cityId: e.target.value})} />
                 </div>
                 <div className="flex space-x-2">
-                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white focus:ring-2 focus:ring-[#5865F2]" value={authForm.teamId} onChange={e => setAuthForm({...authForm, teamId: e.target.value})}>
-                    <option value="" disabled>Select Team...</option>
+                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white" value={authForm.teamId} onChange={e => setAuthForm({...authForm, teamId: e.target.value})}>
+                    <option value="" disabled>Target Team...</option>
                     {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white focus:ring-2 focus:ring-[#5865F2]" value={authForm.requestedRoleId} onChange={e => setAuthForm({...authForm, requestedRoleId: e.target.value})}>
-                    <option value="" disabled>Select Role...</option>
+                  <select required className="w-1/2 p-4 bg-slate-800 border-none rounded-xl outline-none text-white" value={authForm.requestedRoleId} onChange={e => setAuthForm({...authForm, requestedRoleId: e.target.value})}>
+                    <option value="" disabled>Target Role...</option>
                     {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold shadow-lg transition-all">
-                  Next Step
-                </button>
-              </>
+                <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold shadow-lg">Continue to Discord Link</button>
+                <button onClick={() => setAuthView('login')} className="w-full text-slate-500 text-xs font-bold uppercase tracking-widest">Back</button>
+              </form>
             )}
 
-            {/* REQUEST STEP 2: DISCORD MOCK */}
+            {/* REQUEST STEP 2: DISCORD LINK (REQUIRED ID) */}
             {authView === 'request_step2' && (
-              <div className="space-y-4">
-                <div className="p-4 bg-[#5865F2]/10 border border-[#5865F2]/30 rounded-xl">
-                  <p className="text-xs text-[#5865F2] font-bold uppercase mb-2">Simulated OAuth Window</p>
-                  <p className="text-sm text-slate-300">In a live environment, this redirects to Discord. For now, enter your Discord ID and a secure password manually.</p>
+              <form onSubmit={handleRequestAccess} className="space-y-4">
+                <div className="p-4 bg-[#5865F2]/10 border border-[#5865F2]/30 rounded-xl text-center">
+                  <p className="text-sm text-slate-300">To complete your request, you <strong>must</strong> provide your Discord ID. This allows management to verify your identity.</p>
                 </div>
-                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" placeholder="Discord ID (e.g., username#1234)" value={authForm.discordId} onChange={e => setAuthForm({...authForm, discordId: e.target.value})} />
-                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400 focus:ring-2 focus:ring-[#5865F2]" type="password" placeholder="Create a temporary password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white border-2 border-[#5865F2]/50" placeholder="Discord Username (e.g. jdoe#1234)" value={authForm.discordId} onChange={e => setAuthForm({...authForm, discordId: e.target.value})} />
+                <input required className="w-full p-4 bg-slate-800 border-none rounded-xl outline-none text-white placeholder-slate-400" type="password" placeholder="Create Portal Password" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
                 
-                <button type="submit" className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-4 rounded-xl font-bold shadow-lg shadow-[#5865F2]/20 transition-all flex justify-center items-center space-x-2">
-                  <span>Connect Discord & Submit</span>
+                <button type="submit" className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-4 rounded-xl font-bold shadow-lg flex justify-center items-center space-x-2">
+                  <img src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" width="20" alt="" />
+                  <span>Submit Application</span>
                 </button>
-              </div>
-            )}
-          </form>
-
-          <div className="mt-6 text-center border-t border-slate-800 pt-6">
-            {authView === 'login' ? (
-              <button onClick={() => setAuthView('request_step1')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
-                Need management access? Apply here.
-              </button>
-            ) : (
-              <button onClick={() => setAuthView('login')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
-                Back to Login
-              </button>
+              </form>
             )}
           </div>
         </div>
