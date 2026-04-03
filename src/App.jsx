@@ -24,8 +24,32 @@ import MemberModal from './modals/MemberModal';
 import TeamModal from './modals/TeamModal';
 import RoleModal from './modals/RoleModal';
 
-// This looks for a variable called VITE_ADMIN_PASSWORD in your environment
+// --- CONFIGURATION & GLOBAL UTILITIES ---
 const MASTER_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+const YOUR_DISCORD_ID = "826277251414360075"; 
+const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
+const appId = "community-manager";
+
+/** * SECURITY FIX: Data Masking Utility 
+ * This is now outside the component to prevent re-declaration crashes.
+ */
+const maskSensitiveData = (data) => {
+    if (!data || typeof data !== 'object') return data;
+    try {
+        const masked = JSON.parse(JSON.stringify(data)); 
+        const redact = (obj) => {
+            for (let key in obj) {
+                if (SENSITIVE_KEYS.includes(key.toLowerCase())) {
+                    obj[key] = "[REDACTED]";
+                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                    redact(obj[key]);
+                }
+            }
+        };
+        redact(masked);
+        return masked;
+    } catch (e) { return data; }
+};
 
 export default function App() {
   // --- CORE STATE ---
@@ -55,8 +79,6 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const logsEndRef = useRef(null);
 
-  const appId = "community-manager";
-
   // --- THE 15-POINT PERMISSION SYSTEM ---
   const AVAILABLE_PERMISSIONS = [
     { id: 'EDIT_ASSIGNED_TEAM', label: 'Edit Assigned Team' },
@@ -85,7 +107,7 @@ export default function App() {
     }
   }, [currentUser?.darkMode]);
 
-  // --- GLOBAL DEBUG INTERCEPTOR ---
+  // --- GLOBAL DEBUG INTERCEPTOR (LOGGED MODE) ---
   useEffect(() => {
     if (currentUser?.isDebug) {
       const originalLog = console.log;
@@ -93,7 +115,7 @@ export default function App() {
       const originalWarn = console.warn;
 
       const formatArgs = (args) => args.map(a => 
-        typeof a === 'object' ? JSON.stringify(a, null, 2) : a
+        typeof a === 'object' ? JSON.stringify(maskSensitiveData(a), null, 2) : a
       ).join(' ');
 
       console.log = (...args) => {
@@ -109,7 +131,7 @@ export default function App() {
         originalWarn(...args);
       };
 
-      console.log("Debug System Online. Intercepting Firebase Streams...");
+      console.log("Debug Mode Active. Data Sanitization [ENABLED]");
 
       return () => {
         console.log = originalLog;
@@ -129,7 +151,6 @@ export default function App() {
     const initAuth = async () => {
       try {
         await signInAnonymously(auth);
-        console.log("Auth Status: Anonymous Tunnel Established");
       } catch (err) {
         console.error("Auth Tunnel Failed:", err.message);
       }
@@ -141,26 +162,33 @@ export default function App() {
       
       const unsubTeams = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), 
         (snap) => {
-          console.log("Syncing Teams...");
           setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
       );
 
       const unsubRoles = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'roles'), 
         (snap) => {
-          console.log("Syncing Roles...");
           setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
       );
 
       const unsubMembers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'members'), 
         (snap) => {
-          console.log("Syncing Members...");
           setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
       );
+
+      // STEP 4: Auto-expiration check for Debug Mode
+      const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings', 'systemConfig'), (snap) => {
+          if (snap.exists()) {
+              const data = snap.data();
+              if (data.debug_enabled && Date.now() > data.debug_expires_at) {
+                  setDoc(doc(db, 'artifacts', appId, 'public', 'settings', 'systemConfig'), { debug_enabled: false }, { merge: true });
+              }
+          }
+      });
       
-      return () => { unsubTeams(); unsubRoles(); unsubMembers(); };
+      return () => { unsubTeams(); unsubRoles(); unsubMembers(); unsubConfig(); };
     });
 
     return () => unsubAuth();
@@ -174,93 +202,44 @@ export default function App() {
   // --- AUTH HANDLERS ---
   const handleDiscordLogin = async () => {
     const provider = new OAuthProvider('oidc.discord');
-    console.log("Redirecting to Discord OAuth...");
     try {
       const result = await signInWithPopup(auth, provider);
       const discordUID = result.user.providerData[0].uid;
       
+      // SUPER ADMIN CHECK
+      if (discordUID === YOUR_DISCORD_ID) {
+        setCurrentUser({ 
+          id: 'superadmin', 
+          name: 'System Owner', 
+          isSystemAdmin: true, 
+          status: 'active', 
+          darkMode: true,
+          isDebug: true 
+        });
+        return;
+      }
+
       const match = members.find(m => m.discordId === discordUID && m.status === 'active');
       
       if (match) {
-        console.log("Discord UID Match Found. Access Granted.");
         setCurrentUser(match);
       } else {
-        console.warn("UID mismatch or account pending.");
         alert("Access Denied: Your Discord identity is not linked to an approved manager profile.");
         await auth.signOut();
       }
     } catch (error) {
       console.error("OAuth Error:", error.message);
-      if (error.code === 'auth/operation-not-allowed') {
-        alert("Discord Login is not yet enabled in your Firebase Console.");
-      } else {
-        alert(`Discord Login Failed: ${error.message}`);
-      }
+      alert(`Discord Login Failed: ${error.message}`);
     }
   };
-// Verification logic for the toggle endpoint
-const toggleDebugMode = async (user, durationMinutes) => {
-    // 1. Strict Role Check
-    if (user.role !== 'SUPER_ADMIN') {
-        throw new Error("Unauthorized: Super Admin privileges required.");
-    }
 
-    // 2. Calculate Expiration (Step 4: TTL)
-    const expiresAt = Date.now() + (durationMinutes * 60 * 1000);
+  const toggleDebugMode = async (user, durationMinutes) => {
+      if (!user.isSystemAdmin) throw new Error("Unauthorized");
+      const expiresAt = Date.now() + (durationMinutes * 60 * 1000);
+      const docRef = doc(db, 'artifacts', appId, 'public', 'settings', 'systemConfig');
+      await setDoc(docRef, { debug_enabled: true, debug_expires_at: expiresAt, enabled_by: user.id }, { merge: true });
+  };
 
-    // 3. Update System Configuration
-    await SystemSettings.update({
-        debug_enabled: true,
-        debug_expires_at: expiresAt,
-        enabled_by: user.id
-    });
-};
-
-const isDebugActive = async () => {
-    const settings = await SystemSettings.get();
-    
-    if (!settings.debug_enabled) return false;
-
-    // Check if the current time is past the TTL
-    if (Date.now() > settings.debug_expires_at) {
-        // Auto-disable if expired
-        await SystemSettings.update({ debug_enabled: false });
-        return false;
-    }
-
-    return true;
-};
-
-const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
-
-const maskSensitiveData = (data) => {
-    const masked = JSON.parse(JSON.stringify(data)); // Deep clone
-    
-    const redact = (obj) => {
-        for (let key in obj) {
-            if (SENSITIVE_KEYS.includes(key.toLowerCase())) {
-                obj[key] = "[REDACTED]";
-            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                redact(obj[key]);
-            }
-        }
-    };
-
-    redact(masked);
-    return masked;
-};
-// Replace '1234567890' with your actual numeric Discord UID
-const YOUR_DISCORD_ID = "826277251414360075";
-
-if (discordUID === YOUR_DISCORD_ID) {
-  setCurrentUser({ 
-    id: 'superadmin', 
-    name: 'System Owner', 
-    isSystemAdmin: true, 
-    status: 'active', 
-    darkMode: true 
-  });
-}
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (authForm.discordId === 'debug' && authForm.password === 'debug') {
@@ -281,7 +260,6 @@ if (discordUID === YOUR_DISCORD_ID) {
     e.preventDefault();
     const provider = new OAuthProvider('oidc.discord');
     try {
-      console.log("Verifying Discord link for application...");
       const result = await signInWithPopup(auth, provider);
       const verifiedUID = result.user.providerData[0].uid;
       
@@ -303,7 +281,6 @@ if (discordUID === YOUR_DISCORD_ID) {
       setAuthView('login');
       setAuthForm({ name: '', cityId: '', discordId: '', password: '', teamId: '', requestedRoleId: '' });
     } catch (error) {
-      console.error("Submission Crash:", error.message);
       alert(`Submission Failed: ${error.message}`);
     }
   };
@@ -433,10 +410,8 @@ if (discordUID === YOUR_DISCORD_ID) {
               </form>
             )}
 
-            {/* REQUEST STEP 2: DISCORD LINK (AUTO-FETCH ID) */}
             {authView === 'request_step2' && (
               <div className="space-y-6 text-center animate-fade-in">
-                {/* APPLICATION SUMMARY CARD */}
                 <div className="p-6 bg-slate-800/80 rounded-3xl border border-slate-700 text-left relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 text-white group-hover:rotate-12 transition-transform">
                     <MapPin size={48} />
@@ -460,28 +435,13 @@ if (discordUID === YOUR_DISCORD_ID) {
                   <p className="text-xs text-slate-400 font-medium px-4 leading-relaxed">
                     Final Step: Link your Discord account. This will automatically pull your unique identity for management to verify.
                   </p>
-                  
-                  {/* NO MANUAL INPUT HERE ANYMORE */}
-                  <button 
-                    onClick={handleLinkAndSubmit} 
-                    className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-6 rounded-2xl font-black shadow-2xl shadow-[#5865F2]/20 flex justify-center items-center space-x-4 transition-all active:scale-95 group"
-                  >
-                    <img 
-                      src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" 
-                      width="28" 
-                      alt="" 
-                      className="group-hover:scale-110 transition-transform"
-                    />
+                  <button onClick={handleLinkAndSubmit} className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-6 rounded-2xl font-black shadow-2xl shadow-[#5865F2]/20 flex justify-center items-center space-x-4 transition-all active:scale-95 group">
+                    <img src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" width="28" alt="" className="group-hover:scale-110 transition-transform" />
                     <span className="text-lg">Link & Submit</span>
                   </button>
                 </div>
 
-                <button 
-                  onClick={() => setAuthView('request_step1')} 
-                  className="text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors"
-                >
-                  Edit Information
-                </button>
+                <button onClick={() => setAuthView('request_step1')} className="text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Edit Information</button>
               </div>
             )}
           </div>
@@ -494,7 +454,6 @@ if (discordUID === YOUR_DISCORD_ID) {
   return (
     <div className="flex h-screen font-sans overflow-hidden bg-[#f8fafc] text-gray-900 dark:bg-[#0B0F19] dark:text-slate-200 transition-colors duration-500">
       
-      {/* SIDEBAR NAVIGATION */}
       <Sidebar 
         activeTab={activeTab} setActiveTab={setActiveTab} 
         teams={teams} members={members} 
@@ -506,7 +465,6 @@ if (discordUID === YOUR_DISCORD_ID) {
       <div className={`flex-1 flex flex-col overflow-hidden ${currentUser.isDebug ? 'pb-64' : ''}`}>
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 max-w-7xl mx-auto w-full">
           
-          {/* VIEW ROUTING */}
           {activeTab === 'dashboard' && <Dashboard teams={teams} members={members} setActiveTab={setActiveTab} />}
           {activeTab === 'teams-setup' && <TeamSetup teams={teams} setTeamModal={setTeamModal} />}
           {activeTab === 'roles' && <RoleManagement roles={roles} setRoleModal={setRoleModal} />}
@@ -527,7 +485,6 @@ if (discordUID === YOUR_DISCORD_ID) {
             />
           )}
           
-          {/* DYNAMIC TEAM ROSTERS */}
           {!['dashboard', 'teams-setup', 'roles', 'requests', 'permissions'].includes(activeTab) && (
             <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-800 animate-fade-in relative overflow-hidden">
               <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none text-blue-500 dark:text-blue-400">
