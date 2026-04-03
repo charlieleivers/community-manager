@@ -3,11 +3,8 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
-    "./src/components/**/*.{js,ts,jsx,tsx}",
-    "./src/views/**/*.{js,ts,jsx,tsx}",
-    "./src/modals/**/*.{js,ts,jsx,tsx}"
   ],
-  darkMode: 'class',
+  darkMode: 'selector', // <--- CHANGE THIS FROM 'class' TO 'selector'
   theme: {
     extend: {},
   },
