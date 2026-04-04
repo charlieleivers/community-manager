@@ -4,7 +4,7 @@ import {
   Trash2, Edit, ChevronUp, ChevronDown, Star,
   MoveRight, Scissors, Merge, Check, X,
   AlertCircle, Lock, Key, LogOut, UserCheck, Moon, Sun, Sliders, Terminal, Copy, MapPin, Search, Activity, Eye, EyeOff,
-  Briefcase, Bell, Globe, ChevronRight, UploadCloud, Crown
+  Briefcase, Bell, Globe, ChevronRight, UploadCloud, Crown, Folder
 } from 'lucide-react';
 
 import { auth, db } from './firebase-config.js';
@@ -44,7 +44,13 @@ const maskSensitiveData = (data) => {
 // INTERNAL UI COMPONENTS 
 // ============================================================================
 
-const Sidebar = ({ activeTab, setActiveTab, teams, members, currentUser, currentUserRole, isGlobalAdmin, isSysAdmin, handleLogout, toggleDarkMode }) => {
+const Sidebar = ({ activeTab, setActiveTab, teams, categories, members, currentUser, currentUserRole, isGlobalAdmin, isSysAdmin, handleLogout, toggleDarkMode }) => {
+  const [expandedCats, setExpandedCats] = useState({});
+
+  const toggleCategory = (catId) => {
+    setExpandedCats(prev => ({ ...prev, [catId]: !prev[catId] }));
+  };
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'teams-setup', label: 'Team Setup', icon: Settings, adminOnly: true },
@@ -52,6 +58,14 @@ const Sidebar = ({ activeTab, setActiveTab, teams, members, currentUser, current
     { id: 'requests', label: 'Access Requests', icon: Bell, adminOnly: true },
     { id: 'permissions', label: 'Permissions', icon: Lock, adminOnly: true },
   ];
+
+  // Group teams by category and sort them
+  const categorizedTeams = categories.map(cat => ({
+    ...cat,
+    teams: teams.filter(t => t.categoryId === cat.id).sort((a, b) => (a.order || 0) - (b.order || 0))
+  })).sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const uncategorizedTeams = teams.filter(t => !t.categoryId).sort((a, b) => (a.order || 0) - (b.order || 0));
 
   return (
     <aside className="w-72 bg-white dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800 flex flex-col z-50">
@@ -73,12 +87,47 @@ const Sidebar = ({ activeTab, setActiveTab, teams, members, currentUser, current
         })}
 
         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mt-8 mb-4">Divisions</div>
-        {teams.map(team => (
-          <button key={team.id} onClick={() => setActiveTab(team.id)} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-bold transition-all ${activeTab === team.id ? 'bg-slate-100 dark:bg-slate-800 text-red-600 dark:text-white' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-            <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: team.color || '#ef4444' }}></div>
-            <span className="truncate">{team.name}</span>
-          </button>
+        
+        {/* Render Categorized Teams */}
+        {categorizedTeams.map(cat => (
+          <div key={cat.id} className="mb-2">
+            <button 
+              onClick={() => toggleCategory(cat.id)} 
+              className="w-full flex items-center justify-between px-4 py-2 text-slate-500 hover:text-gray-900 dark:hover:text-white transition-colors group"
+            >
+              <div className="flex items-center space-x-2">
+                <Folder size={14} className="text-red-500 opacity-70 group-hover:opacity-100" />
+                <span className="text-xs font-black uppercase tracking-wider">{cat.name}</span>
+              </div>
+              {expandedCats[cat.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            
+            {expandedCats[cat.id] && (
+              <div className="pl-4 space-y-1 mt-1 border-l-2 border-slate-100 dark:border-slate-800 ml-6">
+                {cat.teams.map(team => (
+                  <button key={team.id} onClick={() => setActiveTab(team.id)} className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl font-bold transition-all text-sm ${activeTab === team.id ? 'bg-slate-100 dark:bg-slate-800 text-red-600 dark:text-white' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: team.color || '#ef4444' }}></div>
+                    <span className="truncate">{team.name}</span>
+                  </button>
+                ))}
+                {cat.teams.length === 0 && <div className="px-4 py-2 text-xs text-slate-400 italic">Empty</div>}
+              </div>
+            )}
+          </div>
         ))}
+
+        {/* Render Uncategorized Teams */}
+        {uncategorizedTeams.length > 0 && (
+          <div className="mt-4">
+            <div className="px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-400">Uncategorized</div>
+            {uncategorizedTeams.map(team => (
+              <button key={team.id} onClick={() => setActiveTab(team.id)} className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl font-bold transition-all text-sm ${activeTab === team.id ? 'bg-slate-100 dark:bg-slate-800 text-red-600 dark:text-white' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: team.color || '#ef4444' }}></div>
+                <span className="truncate">{team.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
 
       <div className="p-6 border-t border-gray-100 dark:border-slate-800">
@@ -132,8 +181,9 @@ const Dashboard = ({ teams, members, setActiveTab }) => {
   );
 };
 
-// --- TEAM SETUP (WITH BULK IMPORT & COLORS) ---
-const TeamSetupView = ({ teams, setTeamModal }) => {
+// --- TEAM SETUP (WITH BULK IMPORT, COLORS, CATEGORIES & REORDERING) ---
+const TeamSetupView = ({ teams, categories, setTeamModal, setCategoryModal }) => {
+  
   const handleBulkImport = async () => {
     const input = prompt("Enter team names separated by commas (e.g. Alpha, Bravo, Charlie):");
     if (!input) return;
@@ -142,41 +192,134 @@ const TeamSetupView = ({ teams, setTeamModal }) => {
     
     try {
       const batch = writeBatch(db);
-      names.forEach(name => {
+      names.forEach((name, idx) => {
         const id = `t${Date.now()}${Math.random().toString(36).substr(2, 5)}`;
         const ref = doc(db, 'artifacts', appId, 'public', 'data', 'teams', id);
-        batch.set(ref, { id, name, color: '#ef4444' }); // Default red
+        batch.set(ref, { id, name, color: '#ef4444', order: Date.now() + idx }); 
       });
       await batch.commit();
       alert(`Successfully imported ${names.length} teams.`);
     } catch (e) { alert("Bulk import failed."); }
   };
 
+  const handleDeleteTeam = async (id, name) => {
+    if (window.confirm(`Are you sure you want to delete the ${name} team?`)) {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', id));
+    }
+  };
+
+  const handleDeleteCategory = async (id, name) => {
+    if (window.confirm(`Delete Category "${name}"? Teams inside will become uncategorized.`)) {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'categories', id));
+      // Remove categoryId from associated teams
+      teams.filter(t => t.categoryId === id).forEach(t => {
+        batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', t.id), { categoryId: null });
+      });
+      await batch.commit();
+    }
+  };
+
+  const moveTeam = async (teamId, categoryId, direction) => {
+    const teamList = teams.filter(t => t.categoryId === categoryId).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const currentIndex = teamList.findIndex(t => t.id === teamId);
+    
+    if (direction === 'up' && currentIndex > 0) {
+      const swapIndex = currentIndex - 1;
+      const currentTeam = teamList[currentIndex];
+      const prevTeam = teamList[swapIndex];
+      
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', currentTeam.id), { order: prevTeam.order || swapIndex });
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', prevTeam.id), { order: currentTeam.order || currentIndex });
+      await batch.commit();
+    } else if (direction === 'down' && currentIndex < teamList.length - 1) {
+      const swapIndex = currentIndex + 1;
+      const currentTeam = teamList[currentIndex];
+      const nextTeam = teamList[swapIndex];
+      
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', currentTeam.id), { order: nextTeam.order || swapIndex });
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', nextTeam.id), { order: currentTeam.order || currentIndex });
+      await batch.commit();
+    }
+  };
+
+  const renderTeamCard = (team, index, totalInGroup) => (
+    <div key={team.id} className="p-5 border border-gray-100 dark:border-slate-700 rounded-3xl flex justify-between items-center group bg-slate-50/50 dark:bg-slate-800/50">
+       <div className="flex items-center space-x-4">
+         <div className="w-6 h-6 rounded-full shadow-inner border-2 border-white dark:border-slate-700" style={{ backgroundColor: team.color || '#ef4444' }}></div>
+         <span className="font-black dark:text-white uppercase">{team.name}</span>
+       </div>
+       <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+         <div className="flex flex-col mr-2 bg-white dark:bg-slate-900 rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm">
+           <button disabled={index === 0} onClick={() => moveTeam(team.id, team.categoryId, 'up')} className="px-2 py-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-500 disabled:opacity-20"><ChevronUp size={14}/></button>
+           <div className="h-px bg-gray-100 dark:bg-slate-700"></div>
+           <button disabled={index === totalInGroup - 1} onClick={() => moveTeam(team.id, team.categoryId, 'down')} className="px-2 py-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-500 disabled:opacity-20"><ChevronDown size={14}/></button>
+         </div>
+         <button onClick={() => setTeamModal({ isOpen: true, data: team })} className="p-2 text-slate-400 hover:text-blue-600 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm"><Edit size={16}/></button>
+         <button onClick={() => handleDeleteTeam(team.id, team.name)} className="p-2 text-slate-400 hover:text-red-600 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm"><Trash2 size={16}/></button>
+       </div>
+    </div>
+  );
+
+  const categorizedTeams = categories.map(cat => ({
+    ...cat,
+    teams: teams.filter(t => t.categoryId === cat.id).sort((a, b) => (a.order || 0) - (b.order || 0))
+  })).sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const uncategorizedTeams = teams.filter(t => !t.categoryId).sort((a, b) => (a.order || 0) - (b.order || 0));
+
   return (
     <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm animate-fade-in">
-      <div className="flex justify-between items-center mb-8">
-        <div><h2 className="text-3xl font-black dark:text-white uppercase">Team Setup</h2><p className="text-slate-500">Manage community divisions and colors.</p></div>
+      <div className="flex justify-between items-center mb-10">
+        <div><h2 className="text-3xl font-black dark:text-white uppercase">Team Setup</h2><p className="text-slate-500">Manage categories, divisions, and display orders.</p></div>
         <div className="flex space-x-3">
-          <button onClick={handleBulkImport} className="px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 transition-all"><UploadCloud size={18}/><span>Bulk Import</span></button>
-          <button onClick={() => setTeamModal({ isOpen: true, data: null })} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black flex items-center space-x-2 transition-all shadow-lg shadow-red-600/20"><Plus size={18}/><span>Add Team</span></button>
+          <button onClick={() => setCategoryModal(true)} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 transition-all"><Folder size={18}/><span>New Category</span></button>
+          <button onClick={handleBulkImport} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 transition-all"><UploadCloud size={18}/><span>Bulk Import</span></button>
+          <button onClick={() => setTeamModal({ isOpen: true, data: null })} className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black flex items-center space-x-2 transition-all shadow-lg shadow-red-600/20"><Plus size={18}/><span>Add Team</span></button>
         </div>
       </div>
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {teams.map(team => (
-          <div key={team.id} className="p-6 border border-gray-100 dark:border-slate-700 rounded-3xl flex justify-between items-center group bg-slate-50/50 dark:bg-slate-800/50">
-             <div className="flex items-center space-x-4">
-               <div className="w-6 h-6 rounded-full shadow-inner border-2 border-white dark:border-slate-700" style={{ backgroundColor: team.color || '#ef4444' }}></div>
-               <span className="font-black dark:text-white uppercase">{team.name}</span>
-             </div>
-             <button onClick={() => setTeamModal({ isOpen: true, data: team })} className="p-2 text-slate-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"><Edit size={18}/></button>
+
+      <div className="space-y-8">
+        {categorizedTeams.map(cat => (
+          <div key={cat.id} className="bg-slate-50/30 dark:bg-slate-800/20 p-6 rounded-[2rem] border border-gray-100 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2 text-red-500">
+                <Folder size={20} />
+                <h3 className="text-lg font-black uppercase tracking-wider">{cat.name}</h3>
+              </div>
+              <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {cat.teams.map((team, index) => renderTeamCard(team, index, cat.teams.length))}
+              {cat.teams.length === 0 && <div className="text-sm font-bold text-slate-400 italic p-4">No teams in this category.</div>}
+            </div>
           </div>
         ))}
+
+        {uncategorizedTeams.length > 0 && (
+          <div className="bg-slate-50/30 dark:bg-slate-800/20 p-6 rounded-[2rem] border border-gray-100 dark:border-slate-800">
+            <div className="flex items-center space-x-2 text-slate-500 mb-4">
+              <h3 className="text-lg font-black uppercase tracking-wider">Uncategorized</h3>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {uncategorizedTeams.map((team, index) => renderTeamCard(team, index, uncategorizedTeams.length))}
+            </div>
+          </div>
+        )}
+        
+        {teams.length === 0 && (
+          <div className="text-center p-12 bg-gray-50 dark:bg-slate-900/50 rounded-[32px] border-2 border-dashed border-gray-200 dark:border-slate-800">
+             <p className="text-gray-500 dark:text-slate-400 font-bold">No teams exist yet. Create your first division!</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// --- ROLE MANAGEMENT (WITH BULK IMPORT) ---
+// --- ROLE MANAGEMENT (WITH BULK IMPORT & MANAGEMENT FLAG) ---
 const RoleManagementView = ({ roles, setRoleModal }) => {
   const handleBulkImport = async () => {
     const input = prompt("Enter role names separated by commas (e.g. Manager, Mod, Helper):");
@@ -188,11 +331,17 @@ const RoleManagementView = ({ roles, setRoleModal }) => {
       names.forEach(name => {
         const id = `r${Date.now()}${Math.random().toString(36).substr(2, 5)}`;
         const ref = doc(db, 'artifacts', appId, 'public', 'data', 'roles', id);
-        batch.set(ref, { id, name, scope: 'TEAM', permissions: [] });
+        batch.set(ref, { id, name, scope: 'TEAM', isManagement: false, customPerms: [] });
       });
       await batch.commit();
       alert(`Successfully imported ${names.length} roles.`);
     } catch (e) { alert("Bulk import failed."); }
+  };
+
+  const handleDeleteRole = async (id, name) => {
+    if (window.confirm(`Are you sure you want to delete the ${name} role?`)) {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'roles', id));
+    }
   };
 
   return (
@@ -206,12 +355,23 @@ const RoleManagementView = ({ roles, setRoleModal }) => {
       </div>
       <div className="space-y-3">
         {roles.map(role => (
-          <div key={role.id} className="p-4 border border-gray-100 dark:border-slate-700 rounded-2xl flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-            <div>
-              <div className="font-black dark:text-white uppercase flex items-center space-x-2"><Shield size={16} className="text-red-500"/><span>{role.name}</span></div>
-              <div className="text-xs text-slate-400 font-bold mt-1">Scope: {role.scope}</div>
+          <div key={role.id} className="p-5 border border-gray-100 dark:border-slate-700 rounded-3xl flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50 hover:border-red-400 transition-all group">
+            <div className="flex items-center space-x-6">
+              <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center border border-gray-100 dark:border-slate-700 shadow-sm">
+                <Shield size={20} className="text-red-500"/>
+              </div>
+              <div>
+                <div className="font-black text-lg dark:text-white uppercase flex items-center space-x-3">
+                  <span>{role.name}</span>
+                  {role.isManagement && <span className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] px-2 py-1 rounded-lg tracking-widest border border-red-200 dark:border-red-800">MANAGEMENT</span>}
+                </div>
+                <div className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">Scope: {role.scope}</div>
+              </div>
             </div>
-            <button onClick={() => setRoleModal({ isOpen: true, data: role })} className="p-2 text-slate-400 hover:text-red-600"><Edit size={18}/></button>
+            <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => setRoleModal({ isOpen: true, data: role })} className="p-3 text-slate-400 hover:text-blue-600 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 shadow-sm rounded-xl"><Edit size={18}/></button>
+              <button onClick={() => handleDeleteRole(role.id, role.name)} className="p-3 text-slate-400 hover:text-red-600 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 shadow-sm rounded-xl"><Trash2 size={18}/></button>
+            </div>
           </div>
         ))}
       </div>
@@ -226,6 +386,7 @@ const RoleManagementView = ({ roles, setRoleModal }) => {
 export default function App() {
   // --- CORE STATE ---
   const [teams, setTeams] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [roles, setRoles] = useState([]);
   const [members, setMembers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null); 
@@ -239,6 +400,7 @@ export default function App() {
   const [memberModal, setMemberModal] = useState({ isOpen: false, data: null, teamId: null });
   const [teamModal, setTeamModal] = useState({ isOpen: false, data: null });
   const [roleModal, setRoleModal] = useState({ isOpen: false, data: null });
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
   // --- DEBUG & LOGGING STATE ---
   const [logs, setLogs] = useState([]);
@@ -294,9 +456,10 @@ export default function App() {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (!user) return;
       const unsubTeams = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teams'), (snap) => setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+      const unsubCategories = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'categories'), (snap) => setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubRoles = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'roles'), (snap) => setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubMembers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'members'), (snap) => setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-      return () => { unsubTeams(); unsubRoles(); unsubMembers(); };
+      return () => { unsubTeams(); unsubCategories(); unsubRoles(); unsubMembers(); };
     });
     return () => unsubAuth();
   }, []);
@@ -304,7 +467,7 @@ export default function App() {
   // --- VIRTUAL ROLE INJECTION & PERMS ---
   const currentUserRole = useMemo(() => {
     if (currentUser?.id === 'superadmin') {
-      return { id: 'superadmin_virtual', name: 'System Owner', scope: 'ALL', permissions: AVAILABLE_PERMISSIONS.map(p => p.id), customPerms: AVAILABLE_PERMISSIONS.map(p => p.id) };
+      return { id: 'superadmin_virtual', name: 'System Owner', scope: 'ALL', permissions: AVAILABLE_PERMISSIONS.map(p => p.id), customPerms: AVAILABLE_PERMISSIONS.map(p => p.id), isManagement: true };
     }
     return roles.find(r => r.id === currentUser?.roleId);
   }, [roles, currentUser]);
@@ -367,7 +530,9 @@ export default function App() {
   const handleSaveTeam = async (e, tData) => {
     e.preventDefault();
     const id = tData.id || `t${Date.now()}`;
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', id), { ...tData, id }, { merge: true });
+    // If no order is set, put it at the end
+    const order = tData.order || Date.now();
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', id), { ...tData, id, order }, { merge: true });
     setTeamModal({ isOpen: false, data: null });
   };
 
@@ -376,6 +541,14 @@ export default function App() {
     const id = rData.id || `r${Date.now()}`;
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'roles', id), { ...rData, id }, { merge: true });
     setRoleModal({ isOpen: false, data: null });
+  };
+
+  const handleSaveCategory = async (e, catData) => {
+    e.preventDefault();
+    const id = `c${Date.now()}`;
+    const order = Date.now();
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'categories', id), { name: catData.name, id, order });
+    setCategoryModalOpen(false);
   };
 
   const handleDeleteMember = async (memberId) => {
@@ -495,15 +668,21 @@ export default function App() {
   const InternalTeamModal = () => {
     if (!teamModal.isOpen) return null;
     const isEdit = !!teamModal.data;
-    const [formData, setFormData] = useState(teamModal.data || { name: '', color: '#ef4444' });
+    const [formData, setFormData] = useState(teamModal.data || { name: '', color: '#ef4444', categoryId: '' });
     return (
       <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
         <form onSubmit={(e) => handleSaveTeam(e, formData)} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-gray-100 dark:border-slate-800 shadow-2xl">
           <h2 className="text-2xl font-black mb-6 dark:text-white uppercase">{isEdit ? 'Edit Team' : 'Create Team'}</h2>
           <div className="space-y-4 mb-8">
             <input required autoFocus className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-none outline-none dark:text-white focus:ring-2 focus:ring-red-500" placeholder="Division Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            
+            <select className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white focus:ring-2 focus:ring-red-500 appearance-none" value={formData.categoryId || ''} onChange={e => setFormData({...formData, categoryId: e.target.value})}>
+               <option value="">No Category (Uncategorized)</option>
+               {categories.sort((a,b) => (a.order||0) - (b.order||0)).map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+            </select>
+
             <div className="flex items-center space-x-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl focus-within:ring-2 focus-within:ring-red-500">
-               <label className="font-black dark:text-white flex-1 text-sm uppercase">Team Color Identity</label>
+               <label className="font-black dark:text-white flex-1 text-sm uppercase">Color Identity</label>
                <input type="color" className="w-10 h-10 rounded cursor-pointer border-0 p-0 bg-transparent" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
             </div>
           </div>
@@ -516,10 +695,29 @@ export default function App() {
     );
   };
 
+  const InternalCategoryModal = () => {
+    if (!categoryModalOpen) return null;
+    const [name, setName] = useState('');
+    return (
+      <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+        <form onSubmit={(e) => handleSaveCategory(e, { name })} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-gray-100 dark:border-slate-800 shadow-2xl">
+          <h2 className="text-2xl font-black mb-6 dark:text-white uppercase flex items-center space-x-2"><Folder size={24} className="text-red-500"/><span>New Category</span></h2>
+          <div className="space-y-4 mb-8">
+            <input required autoFocus className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-none outline-none dark:text-white focus:ring-2 focus:ring-red-500" placeholder="Category Name (e.g. High Command)" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div className="flex space-x-3">
+            <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white p-4 rounded-2xl font-black shadow-lg shadow-red-600/20 transition-all">Create</button>
+            <button type="button" onClick={() => setCategoryModalOpen(false)} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-4 rounded-2xl font-black transition-colors">Cancel</button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
   const InternalRoleModal = () => {
     if (!roleModal.isOpen) return null;
     const isEdit = !!roleModal.data;
-    const [formData, setFormData] = useState(roleModal.data || { name: '', scope: 'TEAM', customPerms: [] });
+    const [formData, setFormData] = useState(roleModal.data || { name: '', scope: 'TEAM', customPerms: [], isManagement: false });
     const togglePerm = (id) => { const perms = formData.customPerms || []; setFormData({...formData, customPerms: perms.includes(id) ? perms.filter(p => p !== id) : [...perms, id]}); };
     return (
       <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
@@ -532,6 +730,12 @@ export default function App() {
                 <option value="TEAM">Team Scope</option><option value="MANAGEMENT">Management Scope</option><option value="ALL">Global Scope</option>
               </select>
             </div>
+
+            <label className="flex items-center space-x-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 cursor-pointer hover:border-red-500 transition-colors">
+              <input type="checkbox" checked={formData.isManagement} onChange={e => setFormData({...formData, isManagement: e.target.checked})} className="w-5 h-5 rounded text-red-600 focus:ring-red-500" />
+              <span className="font-black dark:text-white flex items-center space-x-2"><Briefcase size={16} className="text-red-500"/><span>Designate as Management Role</span></span>
+            </label>
+
             <div className="space-y-2">
               <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Assigned Permissions</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -556,7 +760,7 @@ export default function App() {
   // --- RENDER: MAIN APP ---
   return (
     <div className="flex h-screen font-sans overflow-hidden bg-[#f8fafc] text-gray-900 dark:bg-[#0B0F19] dark:text-slate-200 transition-colors duration-500 selection:bg-red-500 selection:text-white">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} teams={teams} members={members} currentUser={currentUser} currentUserRole={currentUserRole} isGlobalAdmin={isGlobalAdmin} isSysAdmin={isSysAdmin} handleLogout={handleLogout} toggleDarkMode={handleToggleDarkMode} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} teams={teams} categories={categories} members={members} currentUser={currentUser} currentUserRole={currentUserRole} isGlobalAdmin={isGlobalAdmin} isSysAdmin={isSysAdmin} handleLogout={handleLogout} toggleDarkMode={handleToggleDarkMode} />
       
       <div className={`flex-1 flex flex-col overflow-hidden ${currentUser.isDebug ? 'pb-64' : ''}`}>
         {isSysAdmin && (
@@ -569,7 +773,7 @@ export default function App() {
 
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 max-w-7xl mx-auto w-full">
           {activeTab === 'dashboard' && <Dashboard teams={teams} members={members} setActiveTab={setActiveTab} />}
-          {activeTab === 'teams-setup' && <TeamSetupView teams={teams} setTeamModal={setTeamModal} />}
+          {activeTab === 'teams-setup' && <TeamSetupView teams={teams} categories={categories} setTeamModal={setTeamModal} setCategoryModal={setCategoryModalOpen} />}
           {activeTab === 'roles' && <RoleManagementView roles={roles} setRoleModal={setRoleModal} />}
           {activeTab === 'requests' && (
              <div className="space-y-8 animate-fade-in">
@@ -691,7 +895,7 @@ export default function App() {
       {currentUser.isDebug && (
         <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/95 border-t-4 border-red-600 text-green-400 font-mono flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
           <div className="bg-red-600 text-white px-6 py-3 flex justify-between items-center font-black text-xs tracking-widest shrink-0">
-            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v5.0</span></div>
+            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v5.1</span></div>
             <div className="flex items-center space-x-6">
                <button onClick={() => setLogs([])} className="hover:underline">FLUSH_LOGS</button>
                <button onClick={toggleLoggedMode} className="bg-white/20 px-2 py-1 rounded hover:bg-white/40 transition-colors uppercase font-black text-[9px]">Terminate Session</button>
@@ -713,6 +917,7 @@ export default function App() {
       {/* RENDER ACTIVE MODAL */}
       <InternalMemberModal />
       <InternalTeamModal />
+      <InternalCategoryModal />
       <InternalRoleModal />
     </div>
   );
