@@ -7,28 +7,20 @@ import {
   Briefcase, Bell, Globe, ChevronRight, UploadCloud, Crown, Folder, Layers
 } from 'lucide-react';
 
-import { initializeApp } from 'firebase/app';
+// FIXED: Properly importing from your local config file
+import { auth, db } from './firebase-config.js';
 import { 
-  getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, writeBatch 
+  collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, writeBatch 
 } from 'firebase/firestore';
 import { 
-  getAuth, signInAnonymously, onAuthStateChanged, OAuthProvider, signInWithPopup, signInWithCustomToken 
+  signInAnonymously, onAuthStateChanged, OAuthProvider, signInWithPopup 
 } from 'firebase/auth';
-
-// --- FIREBASE CONFIGURATION ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: ""
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'kng-staff-control';
 
 // --- SYSTEM CONSTANTS ---
 const YOUR_DISCORD_ID = "826277251414360075"; 
 const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
 const MASTER_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "admin"; 
+const appId = "community-manager";
 
 // --- SECURITY UTILITY: PII MASKING ---
 const maskSensitiveData = (data) => {
@@ -527,8 +519,7 @@ export default function App() {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
-        else await signInAnonymously(auth);
+        await signInAnonymously(auth);
       } catch (err) { console.error("Auth Fail:", err.message); }
     };
     initAuth();
@@ -715,7 +706,6 @@ export default function App() {
     );
   }
 
-  // --- MODAL INTERNAL COMPONENTS ---
   const InternalMemberModal = () => {
     if (!memberModal.isOpen) return null;
     const isEdit = !!memberModal.data;
@@ -778,12 +768,7 @@ export default function App() {
     if (!categoryModal.isOpen) return null;
     const isEdit = !!categoryModal.data;
     const [formData, setFormData] = useState(categoryModal.data || { name: '', masterCategoryId: '', assignedRoles: [], assignedMembers: [] });
-    
-    const toggleItem = (type, id) => {
-      const arr = formData[type] || [];
-      setFormData({...formData, [type]: arr.includes(id) ? arr.filter(i => i !== id) : [...arr, id]});
-    };
-
+    const toggleItem = (type, id) => { const arr = formData[type] || []; setFormData({...formData, [type]: arr.includes(id) ? arr.filter(i => i !== id) : [...arr, id]}); };
     return (
       <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
         <form onSubmit={(e) => handleSaveCategory(e, formData)} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-2xl border border-gray-100 dark:border-slate-800 shadow-2xl max-h-[90vh] flex flex-col">
@@ -796,7 +781,6 @@ export default function App() {
                 {masterCategories.sort((a,b)=>(a.order||0)-(b.order||0)).map(mc => <option key={mc.id} value={mc.id}>{mc.name}</option>)}
               </select>
             </div>
-            
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-700">
                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">Assign Roles</label>
@@ -835,19 +819,13 @@ export default function App() {
     if (!masterCategoryModal.isOpen) return null;
     const isEdit = !!masterCategoryModal.data;
     const [formData, setFormData] = useState(masterCategoryModal.data || { name: '', assignedRoles: [], assignedMembers: [] });
-    
-    const toggleItem = (type, id) => {
-      const arr = formData[type] || [];
-      setFormData({...formData, [type]: arr.includes(id) ? arr.filter(i => i !== id) : [...arr, id]});
-    };
-
+    const toggleItem = (type, id) => { const arr = formData[type] || []; setFormData({...formData, [type]: arr.includes(id) ? arr.filter(i => i !== id) : [...arr, id]}); };
     return (
       <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
         <form onSubmit={(e) => handleSaveMasterCategory(e, formData)} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-2xl border border-gray-100 dark:border-slate-800 shadow-2xl max-h-[90vh] flex flex-col">
           <h2 className="text-2xl font-black mb-6 dark:text-white uppercase flex items-center space-x-2"><Layers size={24} className="text-red-500"/><span>{isEdit ? 'Edit Master Category' : 'New Master Category'}</span></h2>
           <div className="flex-1 overflow-y-auto pr-2 space-y-6 mb-6">
             <input required autoFocus className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-none outline-none dark:text-white focus:ring-2 focus:ring-red-500" placeholder="Master Category Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-            
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-700">
                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">Assign Roles</label>
@@ -898,12 +876,10 @@ export default function App() {
                 <option value="TEAM">Team Scope</option><option value="MANAGEMENT">Management Scope</option><option value="ALL">Global Scope</option>
               </select>
             </div>
-
             <label className="flex items-center space-x-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 cursor-pointer hover:border-red-500 transition-colors">
               <input type="checkbox" checked={formData.isManagement} onChange={e => setFormData({...formData, isManagement: e.target.checked})} className="w-5 h-5 rounded text-red-600 focus:ring-red-500" />
               <span className="font-black dark:text-white flex items-center space-x-2"><Briefcase size={16} className="text-red-500"/><span>Designate as Management Role</span></span>
             </label>
-
             <div className="space-y-2">
               <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Assigned Permissions</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -925,11 +901,9 @@ export default function App() {
     );
   };
 
-  // --- RENDER: MAIN APP ---
   return (
     <div className="flex h-screen font-sans overflow-hidden bg-[#f8fafc] text-gray-900 dark:bg-[#0B0F19] dark:text-slate-200 transition-colors duration-500 selection:bg-red-500 selection:text-white">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} teams={teams} categories={categories} masterCategories={masterCategories} members={members} currentUser={currentUser} currentUserRole={currentUserRole} isGlobalAdmin={isGlobalAdmin} isSysAdmin={isSysAdmin} handleLogout={handleLogout} toggleDarkMode={handleToggleDarkMode} />
-      
       <div className={`flex-1 flex flex-col overflow-hidden ${currentUser.isDebug ? 'pb-64' : ''}`}>
         {isSysAdmin && (
           <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 p-4 flex justify-end">
@@ -938,7 +912,6 @@ export default function App() {
             </button>
           </div>
         )}
-
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 max-w-7xl mx-auto w-full">
           {activeTab === 'dashboard' && <Dashboard teams={teams} members={members} setActiveTab={setActiveTab} />}
           {activeTab === 'teams-setup' && <TeamSetupView teams={teams} categories={categories} masterCategories={masterCategories} setTeamModal={setTeamModal} setCategoryModal={setCategoryModal} setMasterCategoryModal={setMasterCategoryModal} />}
@@ -1001,12 +974,9 @@ export default function App() {
                </div>
              </div>
           )}
-          
-          {/* DYNAMIC TEAM ROSTERS */}
           {!['dashboard', 'teams-setup', 'roles', 'requests', 'permissions'].includes(activeTab) && (
             <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-800 animate-fade-in relative overflow-hidden">
               <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none" style={{ color: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}><Users size={200} /></div>
-              
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 relative z-10 gap-6">
                 <div>
                   <div className="flex items-center space-x-3 mb-2">
@@ -1017,20 +987,14 @@ export default function App() {
                 </div>
                 <button onClick={() => setMemberModal({ isOpen: true, data: null, teamId: activeTab })} className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-[1.5rem] font-black shadow-xl shadow-red-600/20 transition-all flex items-center space-x-3 active:scale-95"><Plus size={24} strokeWidth={3} /><span>Enlist Member</span></button>
               </div>
-
               <div className="grid gap-6 relative z-10">
                 {members.filter(m => m.teamId === activeTab && m.status === 'active').map(member => (
                   <div key={member.id} className="flex flex-col lg:flex-row justify-between items-center p-6 bg-gray-50/50 dark:bg-slate-800/50 rounded-[2.5rem] border border-gray-100 dark:border-slate-700/50 group hover:border-red-400 dark:hover:border-red-500 transition-all duration-300">
                     <div className="flex items-center space-x-6 w-full">
-                      <div className="w-16 h-16 bg-white dark:bg-slate-700 rounded-2xl flex items-center justify-center font-black text-2xl border border-gray-100 dark:border-slate-600 shadow-sm transition-transform group-hover:scale-105" style={{ color: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}>
-                        {member.name.charAt(0).toUpperCase()}
-                      </div>
+                      <div className="w-16 h-16 bg-white dark:bg-slate-700 rounded-2xl flex items-center justify-center font-black text-2xl border border-gray-100 dark:border-slate-600 shadow-sm transition-transform group-hover:scale-105" style={{ color: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}>{member.name.charAt(0).toUpperCase()}</div>
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-3">
-                          <h4 className="font-black text-xl text-gray-900 dark:text-white flex items-center space-x-2">
-                            <span>{member.name}</span>
-                            {member.isMentor && <Star size={18} className="text-yellow-500 fill-yellow-500" title="Mentor" />}
-                          </h4>
+                          <h4 className="font-black text-xl text-gray-900 dark:text-white flex items-center space-x-2"><span>{member.name}</span>{member.isMentor && <Star size={18} className="text-yellow-500 fill-yellow-500" title="Mentor" />}</h4>
                           <span className="flex items-center space-x-1.5 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-sm"><MapPin size={12}/><span>City ID: {member.cityId || '000'}</span></span>
                           <span className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-[0.2em] shadow-lg" style={{ backgroundColor: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}>{roles.find(r => r.id === member.roleId)?.name || 'UNRANKED'}</span>
                         </div>
@@ -1046,24 +1010,16 @@ export default function App() {
                     </div>
                   </div>
                 ))}
-                
-                {members.filter(m => m.teamId === activeTab && m.status === 'active').length === 0 && (
-                   <div className="p-20 text-center bg-gray-50 dark:bg-slate-800/30 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-slate-800 animate-pulse">
-                      <Users size={48} className="mx-auto mb-4 text-slate-300 dark:text-slate-700" />
-                      <p className="text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest text-sm">No Active Personnel Found</p>
-                   </div>
-                )}
+                {members.filter(m => m.teamId === activeTab && m.status === 'active').length === 0 && <div className="p-20 text-center bg-gray-50 dark:bg-slate-800/30 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-slate-800 animate-pulse"><Users size={48} className="mx-auto mb-4 text-slate-300 dark:text-slate-700" /><p className="text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest text-sm">No Active Personnel Found</p></div>}
               </div>
             </div>
           )}
         </div>
       </div>
-
-      {/* GLOBAL DEBUG OVERLAY */}
       {currentUser.isDebug && (
         <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/95 border-t-4 border-red-600 text-green-400 font-mono flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
           <div className="bg-red-600 text-white px-6 py-3 flex justify-between items-center font-black text-xs tracking-widest shrink-0">
-            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v5.2</span></div>
+            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v5.3</span></div>
             <div className="flex items-center space-x-6">
                <button onClick={() => setLogs([])} className="hover:underline">FLUSH_LOGS</button>
                <button onClick={toggleLoggedMode} className="bg-white/20 px-2 py-1 rounded hover:bg-white/40 transition-colors uppercase font-black text-[9px]">Terminate Session</button>
@@ -1072,17 +1028,13 @@ export default function App() {
           <div className="flex-1 overflow-y-auto p-6 text-[11px] space-y-2 selection:bg-green-500 selection:text-black">
             {logs.map((log, i) => (
               <div key={i} className="animate-fade-in border-l-2 border-slate-800 pl-3">
-                <span className="opacity-40 font-bold">[{log.time}]</span> 
-                <span className={`ml-2 font-black ${log.type === 'ERROR' ? 'text-red-500' : log.type === 'WARN' ? 'text-yellow-500' : 'text-green-500'}`}>{log.type} //</span> 
-                <span className="ml-2 text-slate-300">{log.msg}</span>
+                <span className="opacity-40 font-bold">[{log.time}]</span> <span className={`ml-2 font-black ${log.type === 'ERROR' ? 'text-red-500' : log.type === 'WARN' ? 'text-yellow-500' : 'text-green-500'}`}>{log.type} //</span> <span className="ml-2 text-slate-300">{log.msg}</span>
               </div>
             ))}
             <div ref={logsEndRef} />
           </div>
         </div>
       )}
-
-      {/* RENDER ACTIVE MODAL */}
       <InternalMemberModal />
       <InternalTeamModal />
       <InternalCategoryModal />
