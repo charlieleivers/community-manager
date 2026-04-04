@@ -1,3 +1,4 @@
+// --- App.jsx ---
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Users, Shield, Settings, LayoutDashboard, Plus, 
@@ -24,16 +25,13 @@ import MemberModal from './modals/MemberModal';
 import TeamModal from './modals/TeamModal';
 import RoleModal from './modals/RoleModal';
 
-// --- CONFIGURATION & UTILITIES ---
+// --- CONFIGURATION ---
 const MASTER_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 const YOUR_DISCORD_ID = "826277251414360075"; 
 const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
 const appId = "community-manager";
 
-/**
- * SECURITY FIX: Data Masking Utility
- * Masks PII before it hits the debug console.
- */
+// --- SECURITY FIX: DATA MASKING ---
 const maskSensitiveData = (data) => {
     if (!data || typeof data !== 'object') return data;
     try {
@@ -80,8 +78,9 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const logsEndRef = useRef(null);
 
-  // --- THE 15-POINT PERMISSION SYSTEM ---
+  // --- THE 16-POINT PERMISSION SYSTEM (ADDED ADMINISTRATOR) ---
   const AVAILABLE_PERMISSIONS = [
+    { id: 'ADMINISTRATOR', label: 'Administrator (Bypass All Checks)' },
     { id: 'EDIT_ASSIGNED_TEAM', label: 'Edit Assigned Team' },
     { id: 'EDIT_ALL_TEAMS', label: 'Edit All Teams' },
     { id: 'CREATE_TEAM', label: 'Create Team' },
@@ -108,7 +107,7 @@ export default function App() {
     }
   }, [currentUser?.darkMode]);
 
-  // --- GLOBAL DEBUG INTERCEPTOR ---
+  // --- GLOBAL DEBUG INTERCEPTOR (THE SECURITY FIX) ---
   useEffect(() => {
     if (currentUser?.isDebug) {
       const originalLog = console.log;
@@ -132,7 +131,7 @@ export default function App() {
         originalWarn(...args);
       };
 
-      console.log("Logged Mode Enabled. Sanitization layer active.");
+      console.log("Debug System Online. Redaction Interceptor Active.");
 
       return () => {
         console.log = originalLog;
@@ -185,9 +184,22 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  // --- PERMISSION CALCULATIONS ---
-  const currentUserRole = useMemo(() => roles.find(r => r.id === currentUser?.roleId), [roles, currentUser]);
-  const isGlobalAdmin = currentUser?.isSystemAdmin || currentUserRole?.scope === 'MANAGEMENT' || currentUserRole?.scope === 'ALL';
+  // --- PERMISSION CALCULATIONS & VIRTUAL ROLE INJECTION ---
+  const currentUserRole = useMemo(() => {
+    if (currentUser?.id === 'superadmin') {
+      return {
+        id: 'superadmin_virtual',
+        name: 'System Owner',
+        scope: 'ALL',
+        permissions: AVAILABLE_PERMISSIONS.map(p => p.id),
+        customPerms: AVAILABLE_PERMISSIONS.map(p => p.id)
+      };
+    }
+    return roles.find(r => r.id === currentUser?.roleId);
+  }, [roles, currentUser]);
+
+  const hasPerm = (permId) => currentUser?.id === 'superadmin' || currentUserRole?.permissions?.includes('ADMINISTRATOR') || currentUserRole?.permissions?.includes(permId) || currentUser?.customPerms?.includes(permId);
+  const isGlobalAdmin = currentUser?.isSystemAdmin || hasPerm('ADMINISTRATOR') || currentUserRole?.scope === 'MANAGEMENT' || currentUserRole?.scope === 'ALL';
   const isSysAdmin = currentUser?.isSystemAdmin;
 
   // --- AUTH HANDLERS ---
@@ -197,7 +209,6 @@ export default function App() {
       const result = await signInWithPopup(auth, provider);
       const discordUID = result.user.providerData[0].uid;
       
-      // SUPER ADMIN CHECK
       if (discordUID === YOUR_DISCORD_ID) {
         setCurrentUser({ 
           id: 'superadmin', 
@@ -211,7 +222,6 @@ export default function App() {
       }
 
       const match = members.find(m => m.discordId === discordUID && m.status === 'active');
-      
       if (match) {
         setCurrentUser(match);
       } else {
@@ -224,8 +234,8 @@ export default function App() {
   };
 
   const toggleLoggedMode = () => {
-    setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug }));
-    if (!currentUser.isDebug) setLogs([]); 
+      setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug }));
+      if (!currentUser.isDebug) setLogs([]);
   };
 
   const handleAdminLogin = (e) => {
@@ -235,7 +245,7 @@ export default function App() {
       return;
     }
     if (authForm.discordId === 'admin' && authForm.password === MASTER_ADMIN_PASSWORD) {
-      setCurrentUser({ id: 'superadmin', name: 'System Admin', isSystemAdmin: true, status: 'active', darkMode: true, isDebug: false });
+      setCurrentUser({ id: 'superadmin', name: 'System Owner', isSystemAdmin: true, status: 'active', darkMode: true, isDebug: false });
       return;
     }
     const user = members.find(m => m.discordId === authForm.discordId && m.password === authForm.password);
@@ -260,7 +270,8 @@ export default function App() {
         discordId: verifiedUID,
         status: 'pending',
         customPerms: [],
-        darkMode: true
+        darkMode: true,
+        isMentor: false
       };
 
       await setDoc(docRef, payload);
@@ -274,17 +285,18 @@ export default function App() {
   };
 
   // --- DATA HANDLERS ---
-  const handleSaveMember = async (memberData) => {
+  const handleSaveMember = async (e, memberData) => {
+    e.preventDefault();
     try {
       const id = memberData.id || `m${Date.now()}`;
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', id);
-      await setDoc(docRef, { ...memberData, id }, { merge: true });
+      await setDoc(docRef, { ...memberData, id, status: 'active' }, { merge: true });
       setMemberModal({ isOpen: false, data: null, teamId: null });
     } catch (err) { console.error("Member Save Error:", err.message); }
   };
 
   const handleDeleteMember = async (memberId) => {
-    if (!window.confirm("Permanent Removal: Are you sure?")) return;
+    if (!window.confirm("Permanent Removal: Are you sure? They will lose all access.")) return;
     try {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', memberId));
       if (currentUser?.id === memberId) handleLogout();
@@ -326,7 +338,6 @@ export default function App() {
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center p-4 selection:bg-[#5865F2] selection:text-white">
-        {/* FIXED: Restored original max-w-md class for correct width */}
         <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl w-full max-w-md relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#5865F2] to-transparent opacity-50"></div>
           
@@ -374,12 +385,12 @@ export default function App() {
                   <input required className="w-full p-5 pl-12 bg-slate-800 border-none rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all" type="password" placeholder="Key Phrase" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
                 </div>
                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-5 rounded-2xl font-black shadow-xl transition-all">Authenticate</button>
-                <button onClick={() => setAuthView('login')} className="w-full text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
+                <button type="button" onClick={() => setAuthView('login')} className="w-full text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
               </form>
             )}
 
             {authView === 'request_step1' && (
-              <form onSubmit={(e) => { e.preventDefault(); setAuthView('request_step2'); }} className="space-y-4">
+              <form onSubmit={(e) => { e.preventDefault(); setAuthView('request_step2'); }} className="space-y-4 text-left">
                 <div className="flex space-x-2">
                   <input required className="w-2/3 p-5 bg-slate-800 border-none rounded-2xl text-white outline-none" placeholder="City Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} />
                   <input required className="w-1/3 p-5 bg-slate-800 border-none rounded-2xl text-white outline-none" placeholder="ID #" value={authForm.cityId} onChange={e => setAuthForm({...authForm, cityId: e.target.value})} />
@@ -395,14 +406,13 @@ export default function App() {
                   </select>
                 </div>
                 <button type="submit" className="w-full bg-blue-600 text-white p-5 rounded-2xl font-black shadow-lg">Next Step</button>
-                <button onClick={() => setAuthView('login')} className="w-full text-slate-500 text-[10px] font-black uppercase tracking-widest">Back</button>
+                <button type="button" onClick={() => setAuthView('login')} className="w-full text-slate-500 text-[10px] font-black uppercase tracking-widest">Back</button>
               </form>
             )}
 
             {authView === 'request_step2' && (
-              <div className="space-y-6 text-center animate-fade-in">
-                {/* APPLICATION SUMMARY CARD */}
-                <div className="p-6 bg-slate-800/80 rounded-3xl border border-slate-700 text-left relative overflow-hidden group">
+              <div className="space-y-6 text-center animate-fade-in text-left">
+                <div className="p-6 bg-slate-800/80 rounded-3xl border border-slate-700 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 text-white group-hover:rotate-12 transition-transform">
                     <MapPin size={48} />
                   </div>
@@ -422,30 +432,16 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <p className="text-xs text-slate-400 font-medium px-4 leading-relaxed">
+                  <p className="text-xs text-slate-400 font-medium px-4 leading-relaxed text-center">
                     Final Step: Link your Discord account. This will automatically pull your unique identity for management to verify.
                   </p>
-                  
-                  <button 
-                    onClick={handleLinkAndSubmit} 
-                    className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-6 rounded-2xl font-black shadow-2xl shadow-[#5865F2]/20 flex justify-center items-center space-x-4 transition-all active:scale-95 group"
-                  >
-                    <img 
-                      src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" 
-                      width="28" 
-                      alt="" 
-                      className="group-hover:scale-110 transition-transform"
-                    />
+                  <button onClick={handleLinkAndSubmit} className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-6 rounded-2xl font-black shadow-2xl flex justify-center items-center space-x-4 transition-all active:scale-95 group">
+                    <img src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" width="28" alt="" className="group-hover:scale-110 transition-transform" />
                     <span className="text-lg">Link & Submit</span>
                   </button>
                 </div>
 
-                <button 
-                  onClick={() => setAuthView('request_step1')} 
-                  className="text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors"
-                >
-                  Edit Information
-                </button>
+                <button onClick={() => setAuthView('request_step1')} className="text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors w-full">Edit Information</button>
               </div>
             )}
           </div>
@@ -458,7 +454,6 @@ export default function App() {
   return (
     <div className="flex h-screen font-sans overflow-hidden bg-[#f8fafc] text-gray-900 dark:bg-[#0B0F19] dark:text-slate-200 transition-colors duration-500">
       
-      {/* SIDEBAR NAVIGATION */}
       <Sidebar 
         activeTab={activeTab} setActiveTab={setActiveTab} 
         teams={teams} members={members} 
@@ -469,7 +464,7 @@ export default function App() {
       
       <div className={`flex-1 flex flex-col overflow-hidden ${currentUser.isDebug ? 'pb-64' : ''}`}>
         
-        {/* SUPER ADMIN NAVBAR TOGGLE */}
+        {/* SUPER ADMIN TOGGLE BAR */}
         {isSysAdmin && (
           <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 p-4 flex justify-end">
             <button 
@@ -492,7 +487,10 @@ export default function App() {
           {activeTab === 'requests' && (
             <AccessRequests 
               members={members} teams={teams} roles={roles} 
-              handleApprove={(id, tid, rid) => handleSaveMember({...members.find(m=>m.id===id), status: 'active', teamId: tid, roleId: rid})} 
+              handleApprove={(id, tid, rid) => {
+                const memberData = members.find(m => m.id === id);
+                handleSaveMember({ preventDefault: () => {} }, { ...memberData, status: 'active', teamId: tid, roleId: rid });
+              }} 
               handleDeny={handleDeleteMember} 
             />
           )}
@@ -508,14 +506,14 @@ export default function App() {
           {/* DYNAMIC TEAM ROSTERS */}
           {!['dashboard', 'teams-setup', 'roles', 'requests', 'permissions'].includes(activeTab) && (
             <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-800 animate-fade-in relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none text-blue-500 dark:text-blue-400">
+              <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none" style={{ color: teams.find(t=>t.id===activeTab)?.color || '#3b82f6' }}>
                 <Users size={200} />
               </div>
               
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 relative z-10 gap-6">
                 <div>
                   <div className="flex items-center space-x-3 mb-2">
-                    <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-900/20"><Users size={20} /></div>
+                    <div className="p-2 rounded-xl text-white shadow-lg" style={{ backgroundColor: teams.find(t=>t.id===activeTab)?.color || '#3b82f6' }}><Users size={20} /></div>
                     <h2 className="text-4xl font-black tracking-tighter dark:text-white uppercase">
                       {teams.find(t=>t.id===activeTab)?.name}
                     </h2>
@@ -535,17 +533,20 @@ export default function App() {
                 {members.filter(m => m.teamId === activeTab && m.status === 'active').map(member => (
                   <div key={member.id} className="flex flex-col lg:flex-row justify-between items-center p-6 bg-gray-50/50 dark:bg-slate-800/50 rounded-[2.5rem] border border-gray-100 dark:border-slate-700/50 group hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-300">
                     <div className="flex items-center space-x-6 w-full">
-                      <div className="w-16 h-16 bg-white dark:bg-slate-700 rounded-3xl flex items-center justify-center font-black text-2xl text-blue-600 dark:text-blue-400 border border-gray-100 dark:border-slate-600 shadow-sm transition-transform group-hover:scale-105">
+                      <div className="w-16 h-16 bg-white dark:bg-slate-700 rounded-3xl flex items-center justify-center font-black text-2xl border border-gray-100 dark:border-slate-600 shadow-sm transition-transform group-hover:scale-105" style={{ color: teams.find(t=>t.id===activeTab)?.color || '#3b82f6' }}>
                         {member.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-3">
-                          <h4 className="font-black text-xl text-gray-900 dark:text-white">{member.name}</h4>
+                          <h4 className="font-black text-xl text-gray-900 dark:text-white flex items-center space-x-2">
+                            <span>{member.name}</span>
+                            {member.isMentor && <Star size={18} className="text-yellow-500 fill-yellow-500" title="Mentor" />}
+                          </h4>
                           <span className="flex items-center space-x-1.5 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-sm">
                             <MapPin size={12} className="text-blue-500"/>
                             <span>City ID: {member.cityId || '000'}</span>
                           </span>
-                          <span className="bg-blue-600 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-[0.2em] shadow-lg shadow-blue-900/20">
+                          <span className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-[0.2em] shadow-lg shadow-blue-900/20" style={{ backgroundColor: teams.find(t=>t.id===activeTab)?.color || '#3b82f6' }}>
                             {roles.find(r => r.id === member.roleId)?.name || 'UNRANKED'}
                           </span>
                         </div>
@@ -586,7 +587,7 @@ export default function App() {
       {currentUser.isDebug && (
         <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/95 border-t-4 border-red-600 text-green-400 font-mono flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
           <div className="bg-red-600 text-white px-6 py-3 flex justify-between items-center font-black text-xs tracking-widest shrink-0">
-            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v4.0</span></div>
+            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v4.2</span></div>
             <div className="flex items-center space-x-6">
                <button onClick={() => setLogs([])} className="hover:underline">FLUSH_LOGS</button>
                <button onClick={toggleLoggedMode} className="bg-white/20 px-2 py-1 rounded hover:bg-white/40 transition-colors uppercase font-black text-[9px]">Terminate Session</button>

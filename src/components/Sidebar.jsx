@@ -1,3 +1,4 @@
+// --- components/Sidebar.jsx ---
 import React from 'react';
 import { LayoutDashboard, Users, Shield, UserCheck, Key, LogOut, Sun, Moon } from 'lucide-react';
 
@@ -43,7 +44,7 @@ export default function Sidebar({ activeTab, setActiveTab, teams, members, curre
 
         <div className="mt-8">
           <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest px-4 mb-2 block">My Teams</label>
-          <div className="space-y-1">
+          <div className="space-y-1 overflow-y-auto max-h-[300px] pr-2">
             {teams.map(team => (
               <button
                 key={team.id}
@@ -54,7 +55,7 @@ export default function Sidebar({ activeTab, setActiveTab, teams, members, curre
                     : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white'
                 }`}
               >
-                <div className="w-2 h-2 rounded-full bg-blue-400 opacity-80" />
+                <div className="w-2 h-2 rounded-full opacity-80" style={{ backgroundColor: team.color || '#3b82f6' }} />
                 <span className="truncate">{team.name}</span>
               </button>
             ))}

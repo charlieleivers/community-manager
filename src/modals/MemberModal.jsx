@@ -1,5 +1,6 @@
+// --- modals/MemberModal.jsx ---
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Users, Loader2, MapPin, Hash } from 'lucide-react';
+import { X, Shield, Users, Loader2, Star } from 'lucide-react';
 
 export default function MemberModal({ memberModal, setMemberModal, teams, roles, handleSaveMember }) {
   const [formData, setFormData] = useState({
@@ -8,7 +9,8 @@ export default function MemberModal({ memberModal, setMemberModal, teams, roles,
     discordId: '',
     teamId: '',
     roleId: '',
-    status: 'active'
+    status: 'active',
+    isMentor: false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -23,7 +25,8 @@ export default function MemberModal({ memberModal, setMemberModal, teams, roles,
           discordId: '', 
           teamId: memberModal.teamId || '', 
           roleId: '', 
-          status: 'active' 
+          status: 'active',
+          isMentor: false
         });
       }
     }
@@ -34,7 +37,7 @@ export default function MemberModal({ memberModal, setMemberModal, teams, roles,
   const handleSave = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    await handleSaveMember(formData);
+    await handleSaveMember(e, formData);
     setIsSubmitting(false);
   };
 
@@ -89,8 +92,13 @@ export default function MemberModal({ memberModal, setMemberModal, teams, roles,
             </div>
           </div>
 
+          <label className="flex items-center space-x-3 p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 cursor-pointer mt-2">
+            <input type="checkbox" checked={formData.isMentor} onChange={e => setFormData({...formData, isMentor: e.target.checked})} className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500" />
+            <span className="font-black dark:text-white flex items-center space-x-2"><Star size={16} className="text-yellow-500 fill-yellow-500"/><span>Designate as Mentor</span></span>
+          </label>
+
           <button type="submit" disabled={isSubmitting} className="w-full flex justify-center items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl font-bold transition-all shadow-lg mt-6 disabled:opacity-50">
-            {isSubmitting ? <><Loader2 size={20} className="animate-spin" /><span>Saving...</span></> : <span>{memberModal.data ? 'Confirm Promotion' : 'Add Member'}</span>}
+            {isSubmitting ? <><Loader2 size={20} className="animate-spin" /><span>Saving...</span></> : <span>{memberModal.data ? 'Confirm Edits' : 'Add Member'}</span>}
           </button>
         </form>
       </div>

@@ -1,20 +1,22 @@
+// --- modals/TeamModal.jsx ---
 import React, { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase-config.js';
 
 export default function TeamModal({ teamModal, setTeamModal }) {
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', color: '#3b82f6' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (teamModal?.isOpen && teamModal?.data) {
       setFormData({
         name: teamModal.data.name || '',
-        description: teamModal.data.description || ''
+        description: teamModal.data.description || '',
+        color: teamModal.data.color || '#3b82f6'
       });
     } else {
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '', description: '', color: '#3b82f6' });
     }
   }, [teamModal]);
 
@@ -22,25 +24,15 @@ export default function TeamModal({ teamModal, setTeamModal }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    console.log("--- TEAM MODAL SAVE INITIATED ---");
-    console.log("1. Form Data Captured:", formData);
     setIsSubmitting(true);
     
     try {
-      if (!db) throw new Error("CRITICAL: 'db' is undefined. Check firebase-config.js import.");
-
       const id = teamModal.data?.id || `t${Date.now()}`;
-      console.log("2. Generated ID:", id);
-      
       const docRef = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'teams', id);
-      console.log("3. Created Doc Reference:", docRef.path);
-      
-      console.log("4. Awaiting Firebase setDoc...");
       await setDoc(docRef, { ...formData, id }, { merge: true });
-      console.log("5. Firebase SUCCESS! Closing Modal.");
       
       setTeamModal({ isOpen: false, data: null });
-      setFormData({ name: '', description: '' }); 
+      setFormData({ name: '', description: '', color: '#3b82f6' }); 
     } catch (error) {
       console.error("TEAM MODAL CRASH:", error.message);
       alert(`FAILED:\n${error.message}`);
@@ -80,6 +72,15 @@ export default function TeamModal({ teamModal, setTeamModal }) {
               placeholder="What does this team do?" 
               value={formData.description} 
               onChange={e => setFormData({...formData, description: e.target.value})} 
+            />
+          </div>
+          <div className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+            <label className="font-black dark:text-white flex-1 text-sm uppercase">Team Color Identity</label>
+            <input 
+              type="color" 
+              className="w-10 h-10 rounded cursor-pointer border-0 p-0 bg-transparent" 
+              value={formData.color} 
+              onChange={e => setFormData({...formData, color: e.target.value})} 
             />
           </div>
           <button 

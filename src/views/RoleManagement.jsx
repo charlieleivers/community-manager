@@ -1,12 +1,35 @@
+// --- views/RoleManagement.jsx ---
 import React from 'react';
-import { Plus, Edit, Trash2, Shield } from 'lucide-react';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { Plus, Edit, Trash2, Shield, UploadCloud } from 'lucide-react';
+import { doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase-config.js';
 
 export default function RoleManagement({ roles, setRoleModal }) {
   const handleDelete = async (id, name) => {
     if (window.confirm(`Are you sure you want to delete the ${name} role?`)) {
       await deleteDoc(doc(db, 'artifacts', 'community-manager', 'public', 'data', 'roles', id));
+    }
+  };
+
+  const handleBulkImport = async () => {
+    const input = prompt("Enter role names separated by commas (e.g. Manager, Mod, Helper):");
+    if (!input) return;
+    
+    const names = input.split(',').map(n => n.trim()).filter(n => n);
+    if (names.length === 0) return;
+    
+    try {
+      const batch = writeBatch(db);
+      names.forEach(name => {
+        const id = `r${Date.now()}${Math.random().toString(36).substr(2, 5)}`;
+        const ref = doc(db, 'artifacts', 'community-manager', 'public', 'data', 'roles', id);
+        batch.set(ref, { id, name, scope: 'TEAM', customPerms: [] });
+      });
+      await batch.commit();
+      alert(`Successfully imported ${names.length} roles.`);
+    } catch (error) { 
+      console.error("Bulk Import Failed:", error);
+      alert("Bulk import failed."); 
     }
   };
 
@@ -17,12 +40,20 @@ export default function RoleManagement({ roles, setRoleModal }) {
           <h2 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white">Role Hierarchy</h2>
           <p className="text-gray-500 dark:text-slate-400 mt-2 font-medium">Define access levels and global scopes.</p>
         </div>
-        <button 
-          onClick={() => setRoleModal({ isOpen: true, data: null })}
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold shadow-lg transition-all"
-        >
-          <Plus size={20} /> <span>Create Role</span>
-        </button>
+        <div className="flex space-x-3">
+          <button 
+            onClick={handleBulkImport}
+            className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-5 py-3 rounded-2xl font-bold transition-all"
+          >
+            <UploadCloud size={20} /> <span>Bulk Import</span>
+          </button>
+          <button 
+            onClick={() => setRoleModal({ isOpen: true, data: null })}
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold shadow-lg transition-all"
+          >
+            <Plus size={20} /> <span>Create Role</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -41,7 +72,7 @@ export default function RoleManagement({ roles, setRoleModal }) {
                 <div className="mt-4 flex flex-wrap gap-2">
                   {role.customPerms?.map(perm => (
                     <span key={perm} className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-md font-medium border border-blue-100 dark:border-blue-800/50">
-                      {perm.replace('_', ' ')}
+                      {perm.replace(/_/g, ' ')}
                     </span>
                   ))}
                   {(!role.customPerms || role.customPerms.length === 0) && <span className="text-xs text-gray-400 dark:text-slate-500">No specific permissions</span>}
