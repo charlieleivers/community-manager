@@ -60,6 +60,7 @@ const Sidebar = ({ activeTab, setActiveTab, teams, categories, masterCategories,
     { id: 'permissions', label: 'Permissions', icon: Lock, adminOnly: true },
   ];
 
+  // Organize Hierarchy
   const organizedHierarchy = masterCategories.sort((a,b) => (a.order||0) - (b.order||0)).map(mc => ({
     ...mc,
     subCategories: categories.filter(c => c.masterCategoryId === mc.id).sort((a,b) => (a.order||0) - (b.order||0)).map(sc => ({
@@ -126,10 +127,12 @@ const Sidebar = ({ activeTab, setActiveTab, teams, categories, masterCategories,
                             <span className="truncate text-left">{team.name}</span>
                           </button>
                         ))}
+                        {cat.teams.length === 0 && <div className="px-4 py-1 text-[10px] text-slate-400 italic">Empty</div>}
                       </div>
                     )}
                   </div>
                 ))}
+                {mc.subCategories.length === 0 && <div className="px-4 py-1 text-[10px] text-slate-400 italic">Empty</div>}
               </div>
             )}
           </div>
@@ -264,7 +267,7 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
           {filteredMembers.map(member => {
             const team = teams.find(t => t.id === member.teamId) || { name: 'Unknown', color: '#ef4444' };
             const role = roles.find(r => r.id === member.roleId) || { name: 'Unranked', order: 999 };
-            const canManage = hasPerm('ADMINISTRATOR') || currentUserLevel < (role.order || 999);
+            const canManage = hasPerm('ADMINISTRATOR') || currentUserLevel < (role.order !== undefined ? role.order : 999);
             
             return (
               <div key={member.id} className="flex flex-col lg:flex-row justify-between items-center p-5 bg-gray-50/50 dark:bg-slate-800/50 rounded-[2rem] border border-gray-100 dark:border-slate-700/50 group hover:border-red-400 dark:hover:border-red-500 transition-all duration-300">
@@ -279,9 +282,15 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
                         {member.isMentor && <Star size={16} className="text-yellow-500 fill-yellow-500" title="Mentor" />}
                         {member.isTestAccount && <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[10px] px-2 py-1 rounded-lg tracking-widest border border-purple-200 dark:border-purple-800">TEST BOT</span>}
                       </h4>
-                      <span className="flex items-center space-x-1 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-2 py-1 rounded-lg shadow-sm"><MapPin size={10}/><span>ID: {member.cityId || '000'}</span></span>
-                      <span className="text-white text-[9px] font-black uppercase px-2 py-1 rounded-lg tracking-[0.2em] shadow-sm" style={{ backgroundColor: team.color }}>{team.name}</span>
-                      <span className="text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 text-[9px] font-black uppercase px-2 py-1 rounded-lg tracking-widest">{role.name}</span>
+                      <span className="flex items-center space-x-1 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-2 py-1 rounded-lg shadow-sm">
+                        <MapPin size={10}/><span>ID: {member.cityId || '000'}</span>
+                      </span>
+                      <span className="text-white text-[9px] font-black uppercase px-2 py-1 rounded-lg tracking-[0.2em] shadow-sm" style={{ backgroundColor: team.color }}>
+                        {team.name}
+                      </span>
+                      <span className="text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 text-[9px] font-black uppercase px-2 py-1 rounded-lg tracking-widest">
+                        {role.name}
+                      </span>
                     </div>
                     <div className="flex items-center space-x-2 mt-2">
                       <div className="px-2 py-1 bg-[#5865F2]/10 border border-[#5865F2]/20 rounded-lg text-[10px] font-mono text-[#5865F2] dark:text-[#5865F2] font-black tracking-tight">{member.discordId}</div>
@@ -300,6 +309,7 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
               </div>
             );
           })}
+          
           {filteredMembers.length === 0 && (
              <div className="p-16 text-center bg-gray-50 dark:bg-slate-800/30 rounded-[2.5rem] border-2 border-dashed border-gray-200 dark:border-slate-800">
                 <Users size={40} className="mx-auto mb-4 text-slate-300 dark:text-slate-700" />
@@ -312,10 +322,11 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
   );
 };
 
-// --- TEAM SETUP ---
+
+// --- TEAM SETUP (3-TIER HIERARCHY) ---
 const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setCategoryModal, setMasterCategoryModal }) => {
   const handleBulkImport = async () => {
-    const input = prompt("Enter team names separated by commas:");
+    const input = prompt("Enter team names separated by commas (e.g. Alpha, Bravo, Charlie):");
     if (!input) return;
     const names = input.split(',').map(n => n.trim()).filter(n => n);
     if (names.length === 0) return;
@@ -327,11 +338,13 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
         batch.set(ref, { id, name, color: '#ef4444', order: Date.now() + idx }); 
       });
       await batch.commit();
-      alert(`Imported ${names.length} teams.`);
+      alert(`Successfully imported ${names.length} teams.`);
     } catch (e) { alert("Bulk import failed."); }
   };
 
-  const handleDeleteTeam = async (id, name) => { if (window.confirm(`Delete the ${name} team?`)) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', id)); };
+  const handleDeleteTeam = async (id, name) => {
+    if (window.confirm(`Delete the ${name} team?`)) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', id));
+  };
   const handleDeleteCategory = async (id, name) => {
     if (window.confirm(`Delete Sub Category "${name}"? Teams inside will become uncategorized.`)) {
       const batch = writeBatch(db);
@@ -349,20 +362,26 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
     }
   };
 
+  // Reorder logic safely swaps positions in the array and reassigns 0, 1, 2... orders
   const moveTeam = async (teamId, categoryId, direction) => {
     const teamList = teams.filter(t => t.categoryId === categoryId).sort((a, b) => (a.order || 0) - (b.order || 0));
     const currentIndex = teamList.findIndex(t => t.id === teamId);
+    
     if (direction === 'up' && currentIndex > 0) {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', teamList[currentIndex].id), { order: teamList[currentIndex-1].order || (currentIndex-1) });
-      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', teamList[currentIndex-1].id), { order: teamList[currentIndex].order || currentIndex });
-      await batch.commit();
+      const temp = teamList[currentIndex - 1];
+      teamList[currentIndex - 1] = teamList[currentIndex];
+      teamList[currentIndex] = temp;
     } else if (direction === 'down' && currentIndex < teamList.length - 1) {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', teamList[currentIndex].id), { order: teamList[currentIndex+1].order || (currentIndex+1) });
-      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', teamList[currentIndex+1].id), { order: teamList[currentIndex].order || currentIndex });
-      await batch.commit();
-    }
+      const temp = teamList[currentIndex + 1];
+      teamList[currentIndex + 1] = teamList[currentIndex];
+      teamList[currentIndex] = temp;
+    } else return;
+
+    const batch = writeBatch(db);
+    teamList.forEach((team, index) => {
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'teams', team.id), { order: index });
+    });
+    await batch.commit();
   };
 
   const renderTeamCard = (team, index, totalInGroup) => (
@@ -399,9 +418,9 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-4">
         <div><h2 className="text-3xl font-black dark:text-white uppercase">Team Setup</h2><p className="text-slate-500">Manage categories, divisions, and assignments.</p></div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setMasterCategoryModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><Layers size={16}/><span>Master Cat</span></button>
-          <button onClick={() => setCategoryModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><Folder size={16}/><span>Sub Cat</span></button>
-          <button onClick={handleBulkImport} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><UploadCloud size={16}/><span>Bulk</span></button>
+          <button onClick={() => setMasterCategoryModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><Layers size={16}/><span>Master Cat</span></button>
+          <button onClick={() => setCategoryModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><Folder size={16}/><span>Sub Cat</span></button>
+          <button onClick={handleBulkImport} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><UploadCloud size={16}/><span>Bulk</span></button>
           <button onClick={() => setTeamModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black flex items-center space-x-2 shadow-lg shadow-red-600/20 text-sm"><Plus size={16}/><span>Add Team</span></button>
         </div>
       </div>
@@ -412,7 +431,12 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
             <div className="flex items-center justify-between mb-6 border-b border-gray-200 dark:border-slate-700 pb-4">
               <div className="flex items-center space-x-3 text-slate-800 dark:text-white">
                 <div className="p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-600"><Layers size={20} className="text-red-500" /></div>
-                <div><h3 className="text-2xl font-black uppercase tracking-tighter">{mc.name}</h3><div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Roles: {mc.assignedRoles?.length||0} | Users: {mc.assignedMembers?.length||0}</div></div>
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tighter">{mc.name}</h3>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                    Roles: {mc.assignedRoles?.length||0} | Users: {mc.assignedMembers?.length||0}
+                  </div>
+                </div>
               </div>
               <div className="flex space-x-2">
                 <button onClick={() => setMasterCategoryModal({ isOpen: true, data: mc })} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 rounded-xl shadow-sm"><Edit size={16}/></button>
@@ -499,25 +523,32 @@ const RoleManagementView = ({ roles, setRoleModal }) => {
     if (window.confirm(`Delete the ${name} role?`)) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'roles', id));
   };
 
+  // Reorder logic safely swaps positions in the array and reassigns 0, 1, 2... orders
   const moveRole = async (roleId, direction) => {
-    const currentIndex = sortedRoles.findIndex(r => r.id === roleId);
+    const currentList = [...roles].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const currentIndex = currentList.findIndex(r => r.id === roleId);
+    
     if (direction === 'up' && currentIndex > 0) {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', sortedRoles[currentIndex].id), { order: sortedRoles[currentIndex-1].order || (currentIndex-1) });
-      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', sortedRoles[currentIndex-1].id), { order: sortedRoles[currentIndex].order || currentIndex });
-      await batch.commit();
-    } else if (direction === 'down' && currentIndex < sortedRoles.length - 1) {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', sortedRoles[currentIndex].id), { order: sortedRoles[currentIndex+1].order || (currentIndex+1) });
-      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', sortedRoles[currentIndex+1].id), { order: sortedRoles[currentIndex].order || currentIndex });
-      await batch.commit();
-    }
+      const temp = currentList[currentIndex - 1];
+      currentList[currentIndex - 1] = currentList[currentIndex];
+      currentList[currentIndex] = temp;
+    } else if (direction === 'down' && currentIndex < currentList.length - 1) {
+      const temp = currentList[currentIndex + 1];
+      currentList[currentIndex + 1] = currentList[currentIndex];
+      currentList[currentIndex] = temp;
+    } else return;
+
+    const batch = writeBatch(db);
+    currentList.forEach((role, index) => {
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', role.id), { order: index });
+    });
+    await batch.commit();
   };
 
   return (
     <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm animate-fade-in">
       <div className="flex justify-between items-center mb-8">
-        <div><h2 className="text-3xl font-black dark:text-white uppercase">Role Hierarchy</h2><p className="text-slate-500">Define chain of command and access levels.</p></div>
+        <div><h2 className="text-3xl font-black dark:text-white uppercase">Role Hierarchy</h2><p className="text-slate-500">Define chain of command and access levels. Higher roles bypass lower role edits.</p></div>
         <div className="flex space-x-3">
           <button onClick={handleBulkImport} className="px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2"><UploadCloud size={18}/><span>Bulk Import</span></button>
           <button onClick={() => setRoleModal({ isOpen: true, data: null })} className="px-6 py-3 bg-red-600 text-white rounded-2xl font-black flex items-center space-x-2 shadow-lg shadow-red-600/20"><Plus size={18}/><span>Add Role</span></button>
@@ -635,7 +666,8 @@ export default function App() {
   const getRoleLevel = (roleId) => {
     if (roleId === 'superadmin_virtual') return -1;
     const role = roles.find(r => r.id === roleId);
-    return role ? (role.order || 999) : 1000;
+    // Explicitly check for undefined to prevent the "Zero Bug"
+    return role ? (role.order !== undefined ? role.order : 999) : 1000;
   };
 
   const currentUserRole = useMemo(() => {
@@ -702,7 +734,7 @@ export default function App() {
   const handleSaveTeam = async (e, tData) => {
     e.preventDefault();
     const id = tData.id || `t${Date.now()}`;
-    const order = tData.order || Date.now();
+    const order = tData.order !== undefined ? tData.order : Date.now();
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', id), { ...tData, id, order }, { merge: true });
     setTeamModal({ isOpen: false, data: null });
   };
@@ -710,7 +742,7 @@ export default function App() {
   const handleSaveRole = async (e, rData) => {
     e.preventDefault();
     const id = rData.id || `r${Date.now()}`;
-    const order = rData.order || Date.now();
+    const order = rData.order !== undefined ? rData.order : Date.now();
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'roles', id), { ...rData, id, order }, { merge: true });
     setRoleModal({ isOpen: false, data: null });
   };
@@ -718,7 +750,7 @@ export default function App() {
   const handleSaveCategory = async (e, catData) => {
     e.preventDefault();
     const id = catData.id || `c${Date.now()}`;
-    const order = catData.order || Date.now();
+    const order = catData.order !== undefined ? catData.order : Date.now();
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'categories', id), { ...catData, id, order }, { merge: true });
     setCategoryModal({ isOpen: false, data: null });
   };
@@ -726,7 +758,7 @@ export default function App() {
   const handleSaveMasterCategory = async (e, mcData) => {
     e.preventDefault();
     const id = mcData.id || `mc${Date.now()}`;
-    const order = mcData.order || Date.now();
+    const order = mcData.order !== undefined ? mcData.order : Date.now();
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterCategories', id), { ...mcData, id, order }, { merge: true });
     setMasterCategoryModal({ isOpen: false, data: null });
   };
@@ -844,7 +876,7 @@ export default function App() {
     const [formData, setFormData] = useState(memberModal.data || { name: '', cityId: '', discordId: '', teamId: memberModal.teamId || '', roleId: '', isMentor: false });
     
     // Filter roles for dropdown based on Hierarchy
-    const availableRolesToAssign = roles.filter(r => hasPerm('ADMINISTRATOR') || currentUserLevel < (r.order || 999)).sort((a,b)=>(a.order||0)-(b.order||0));
+    const availableRolesToAssign = roles.filter(r => hasPerm('ADMINISTRATOR') || currentUserLevel < (r.order !== undefined ? r.order : 999)).sort((a,b)=>(a.order||0)-(b.order||0));
 
     return (
       <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
@@ -1057,64 +1089,6 @@ export default function App() {
           {activeTab === 'all-personnel' && <AllPersonnelView members={members} teams={teams} roles={roles} setMemberModal={setMemberModal} setTestUserModal={setTestUserModal} handleDeleteMember={handleDeleteMember} copyId={copyId} isSysAdmin={isSysAdmin} currentUserLevel={currentUserLevel} hasPerm={hasPerm} />}
           {activeTab === 'teams-setup' && <TeamSetupView teams={teams} categories={categories} masterCategories={masterCategories} setTeamModal={setTeamModal} setCategoryModal={setCategoryModal} setMasterCategoryModal={setMasterCategoryModal} />}
           {activeTab === 'roles' && <RoleManagementView roles={roles} setRoleModal={setRoleModal} />}
-          {activeTab === 'requests' && (
-             <div className="space-y-8 animate-fade-in">
-               <h2 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white uppercase">Access Requests</h2>
-               <div className="grid gap-6 mt-8">
-                 {members.filter(m => m.status === 'pending').map(req => (
-                   <div key={req.id} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 flex flex-col lg:flex-row items-center justify-between shadow-sm relative overflow-hidden group hover:border-red-500 transition-colors">
-                     <div className="absolute top-0 left-0 w-2 h-full bg-red-600"></div>
-                     <div className="flex items-center space-x-6 w-full">
-                       <div className="w-20 h-20 bg-red-600 text-white rounded-2xl flex flex-col items-center justify-center font-black shrink-0 shadow-lg shadow-red-600/20">
-                         <span className="text-[10px] opacity-70 uppercase tracking-widest">City</span><span className="text-2xl">{req.cityId || '??'}</span>
-                       </div>
-                       <div className="flex-1">
-                         <h4 className="font-black text-2xl text-gray-900 dark:text-white">{req.name}</h4>
-                         <div className="flex gap-4 mt-3">
-                           <span className="text-xs font-bold text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 px-3 py-2 rounded-xl">{teams.find(t => t.id === req.teamId)?.name}</span>
-                           <span className="text-xs font-bold text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 px-3 py-2 rounded-xl">{roles.find(r => r.id === req.requestedRoleId)?.name}</span>
-                           <span className="text-xs font-mono font-black text-[#5865F2] bg-[#5865F2]/10 px-3 py-2 rounded-xl">ID: {req.discordId}</span>
-                         </div>
-                       </div>
-                     </div>
-                     <div className="flex space-x-3 shrink-0 mt-6 lg:mt-0">
-                       <button onClick={() => handleSaveMember({ preventDefault: () => {} }, { ...req, status: 'active' })} className="flex items-center justify-center space-x-2 px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-black shadow-lg shadow-green-600/20 transition-all active:scale-95"><Check size={20} /><span>Approve</span></button>
-                       <button onClick={() => handleDeleteMember(req.id)} className="flex items-center justify-center space-x-2 px-8 py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-2xl font-black transition-all active:scale-95"><X size={20} /><span>Deny</span></button>
-                     </div>
-                   </div>
-                 ))}
-                 {members.filter(m => m.status === 'pending').length === 0 && <div className="p-24 text-center bg-gray-50 dark:bg-slate-900/50 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-slate-800"><p className="text-slate-400 font-bold uppercase tracking-widest">No pending requests</p></div>}
-               </div>
-             </div>
-          )}
-          {activeTab === 'permissions' && (
-             <div className="space-y-8 animate-fade-in">
-               <h2 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white uppercase">Global Permissions</h2>
-               <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm">
-                 <p className="text-slate-500 mb-6">Select a role to modify its system privileges.</p>
-                 <div className="grid gap-4">
-                   {roles.map(role => (
-                     <div key={role.id} className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-gray-100 dark:border-slate-700">
-                       <h3 className="font-black text-xl dark:text-white flex items-center space-x-2 mb-4"><Shield size={20} className="text-red-500" /><span>{role.name}</span></h3>
-                       <div className="flex flex-wrap gap-3">
-                         {AVAILABLE_PERMISSIONS.map(perm => {
-                           const hasPerm = role.customPerms?.includes(perm.id);
-                           return (
-                             <button key={perm.id} onClick={() => {
-                               const newPerms = hasPerm ? role.customPerms.filter(p => p !== perm.id) : [...(role.customPerms || []), perm.id];
-                               handleSaveRole({ preventDefault: () => {} }, { ...role, customPerms: newPerms });
-                             }} className={`px-4 py-2 rounded-xl text-xs font-black transition-all border-2 ${hasPerm ? 'bg-red-50 text-red-600 border-red-500/30 dark:bg-red-900/20 dark:text-red-400' : 'bg-white dark:bg-slate-800 text-slate-500 border-transparent hover:border-slate-300 dark:hover:border-slate-600'}`}>
-                               {perm.label}
-                             </button>
-                           );
-                         })}
-                       </div>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-             </div>
-          )}
           
           {/* Dynamic Team Rosters */}
           {!['dashboard', 'all-personnel', 'teams-setup', 'roles', 'requests', 'permissions'].includes(activeTab) && (
@@ -1135,7 +1109,7 @@ export default function App() {
               <div className="grid gap-6 relative z-10">
                 {members.filter(m => m.teamId === activeTab && m.status === 'active').map(member => {
                   const role = roles.find(r => r.id === member.roleId) || { name: 'Unranked', order: 999 };
-                  const canManage = hasPerm('ADMINISTRATOR') || currentUserLevel < (role.order || 999);
+                  const canManage = hasPerm('ADMINISTRATOR') || currentUserLevel < (role.order !== undefined ? role.order : 999);
 
                   return (
                     <div key={member.id} className="flex flex-col lg:flex-row justify-between items-center p-6 bg-gray-50/50 dark:bg-slate-800/50 rounded-[2.5rem] border border-gray-100 dark:border-slate-700/50 group hover:border-red-400 dark:hover:border-red-500 transition-all duration-300">
@@ -1179,7 +1153,7 @@ export default function App() {
       {currentUser.isDebug && (
         <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/95 border-t-4 border-red-600 text-green-400 font-mono flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
           <div className="bg-red-600 text-white px-6 py-3 flex justify-between items-center font-black text-xs tracking-widest shrink-0">
-            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v6.0</span></div>
+            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v6.1</span></div>
             <div className="flex items-center space-x-6">
                <button onClick={() => setLogs([])} className="hover:underline">FLUSH_LOGS</button>
                <button onClick={toggleLoggedMode} className="bg-white/20 px-2 py-1 rounded hover:bg-white/40 transition-colors uppercase font-black text-[9px]">Terminate Session</button>
