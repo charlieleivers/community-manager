@@ -7,28 +7,21 @@ import {
   Briefcase, Bell, Globe, ChevronRight, UploadCloud, Crown
 } from 'lucide-react';
 
-import { initializeApp } from 'firebase/app';
+// FIXED: Reverted to importing your actual configured Firebase instance
+import { auth, db } from './firebase-config.js';
 import { 
-  getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, getDoc, writeBatch 
+  collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, writeBatch 
 } from 'firebase/firestore';
 import { 
-  getAuth, signInAnonymously, onAuthStateChanged, OAuthProvider, signInWithPopup, signInWithCustomToken 
+  signInAnonymously, onAuthStateChanged, OAuthProvider, signInWithPopup 
 } from 'firebase/auth';
-
-// --- FIREBASE CONFIGURATION ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: ""
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'kng-staff-control';
 
 // --- SYSTEM CONSTANTS ---
 const YOUR_DISCORD_ID = "826277251414360075"; 
 const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
 const MASTER_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "admin"; 
+// FIXED: Reverted to your original DB path so your data doesn't disappear
+const appId = "community-manager"; 
 
 // --- SECURITY UTILITY: PII MASKING ---
 const maskSensitiveData = (data) => {
@@ -295,8 +288,7 @@ export default function App() {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
-        else await signInAnonymously(auth);
+        await signInAnonymously(auth);
       } catch (err) { console.error("Auth Fail:", err.message); }
     };
     initAuth();
@@ -392,6 +384,11 @@ export default function App() {
     if (!window.confirm("Remove Personnel? They will lose all access.")) return;
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', memberId));
     if (currentUser?.id === memberId) handleLogout();
+  };
+
+  const toggleLoggedMode = () => {
+    setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug }));
+    if (!currentUser.isDebug) setLogs([]);
   };
 
   const handleLogout = () => { setCurrentUser(null); setActiveTab('dashboard'); setLogs([]); document.documentElement.classList.remove('dark'); };
