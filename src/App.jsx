@@ -24,13 +24,16 @@ import MemberModal from './modals/MemberModal';
 import TeamModal from './modals/TeamModal';
 import RoleModal from './modals/RoleModal';
 
-// --- CONFIGURATION ---
+// --- CONFIGURATION & UTILITIES ---
 const MASTER_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 const YOUR_DISCORD_ID = "826277251414360075"; 
 const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
 const appId = "community-manager";
 
-// --- SECURITY FIX: DATA MASKING ---
+/**
+ * SECURITY FIX: Data Masking Utility
+ * Masks PII before it hits the debug console.
+ */
 const maskSensitiveData = (data) => {
     if (!data || typeof data !== 'object') return data;
     try {
@@ -105,7 +108,7 @@ export default function App() {
     }
   }, [currentUser?.darkMode]);
 
-  // --- GLOBAL DEBUG INTERCEPTOR (THE SECURITY FIX) ---
+  // --- GLOBAL DEBUG INTERCEPTOR ---
   useEffect(() => {
     if (currentUser?.isDebug) {
       const originalLog = console.log;
@@ -129,7 +132,7 @@ export default function App() {
         originalWarn(...args);
       };
 
-      console.log("Debug System Online. Redaction Interceptor Active.");
+      console.log("Logged Mode Enabled. Sanitization layer active.");
 
       return () => {
         console.log = originalLog;
@@ -208,6 +211,7 @@ export default function App() {
       }
 
       const match = members.find(m => m.discordId === discordUID && m.status === 'active');
+      
       if (match) {
         setCurrentUser(match);
       } else {
@@ -220,8 +224,8 @@ export default function App() {
   };
 
   const toggleLoggedMode = () => {
-      setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug }));
-      if (!currentUser.isDebug) setLogs([]);
+    setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug }));
+    if (!currentUser.isDebug) setLogs([]); 
   };
 
   const handleAdminLogin = (e) => {
@@ -322,7 +326,8 @@ export default function App() {
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center p-4 selection:bg-[#5865F2] selection:text-white">
-        <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl w-full max-md relative overflow-hidden">
+        {/* FIXED: Restored original max-w-md class for correct width */}
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl w-full max-w-md relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#5865F2] to-transparent opacity-50"></div>
           
           <div className="flex justify-center mb-8">
@@ -396,6 +401,7 @@ export default function App() {
 
             {authView === 'request_step2' && (
               <div className="space-y-6 text-center animate-fade-in">
+                {/* APPLICATION SUMMARY CARD */}
                 <div className="p-6 bg-slate-800/80 rounded-3xl border border-slate-700 text-left relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 text-white group-hover:rotate-12 transition-transform">
                     <MapPin size={48} />
@@ -420,13 +426,26 @@ export default function App() {
                     Final Step: Link your Discord account. This will automatically pull your unique identity for management to verify.
                   </p>
                   
-                  <button onClick={handleLinkAndSubmit} className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-6 rounded-2xl font-black shadow-2xl shadow-[#5865F2]/20 flex justify-center items-center space-x-4 transition-all active:scale-95 group">
-                    <img src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" width="28" alt="" className="group-hover:scale-110 transition-transform" />
+                  <button 
+                    onClick={handleLinkAndSubmit} 
+                    className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-6 rounded-2xl font-black shadow-2xl shadow-[#5865F2]/20 flex justify-center items-center space-x-4 transition-all active:scale-95 group"
+                  >
+                    <img 
+                      src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" 
+                      width="28" 
+                      alt="" 
+                      className="group-hover:scale-110 transition-transform"
+                    />
                     <span className="text-lg">Link & Submit</span>
                   </button>
                 </div>
 
-                <button onClick={() => setAuthView('request_step1')} className="text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Edit Information</button>
+                <button 
+                  onClick={() => setAuthView('request_step1')} 
+                  className="text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors"
+                >
+                  Edit Information
+                </button>
               </div>
             )}
           </div>
@@ -439,6 +458,7 @@ export default function App() {
   return (
     <div className="flex h-screen font-sans overflow-hidden bg-[#f8fafc] text-gray-900 dark:bg-[#0B0F19] dark:text-slate-200 transition-colors duration-500">
       
+      {/* SIDEBAR NAVIGATION */}
       <Sidebar 
         activeTab={activeTab} setActiveTab={setActiveTab} 
         teams={teams} members={members} 
@@ -449,7 +469,7 @@ export default function App() {
       
       <div className={`flex-1 flex flex-col overflow-hidden ${currentUser.isDebug ? 'pb-64' : ''}`}>
         
-        {/* SUPER ADMIN TOGGLE BAR */}
+        {/* SUPER ADMIN NAVBAR TOGGLE */}
         {isSysAdmin && (
           <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 p-4 flex justify-end">
             <button 
