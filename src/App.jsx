@@ -60,7 +60,6 @@ const Sidebar = ({ activeTab, setActiveTab, teams, categories, masterCategories,
     { id: 'permissions', label: 'Permissions', icon: Lock, adminOnly: true },
   ];
 
-  // Organize Hierarchy
   const organizedHierarchy = masterCategories.sort((a,b) => (a.order||0) - (b.order||0)).map(mc => ({
     ...mc,
     subCategories: categories.filter(c => c.masterCategoryId === mc.id).sort((a,b) => (a.order||0) - (b.order||0)).map(sc => ({
@@ -127,12 +126,10 @@ const Sidebar = ({ activeTab, setActiveTab, teams, categories, masterCategories,
                             <span className="truncate text-left">{team.name}</span>
                           </button>
                         ))}
-                        {cat.teams.length === 0 && <div className="px-4 py-1 text-[10px] text-slate-400 italic">Empty</div>}
                       </div>
                     )}
                   </div>
                 ))}
-                {mc.subCategories.length === 0 && <div className="px-4 py-1 text-[10px] text-slate-400 italic">Empty</div>}
               </div>
             )}
           </div>
@@ -224,8 +221,8 @@ const Dashboard = ({ teams, members, setActiveTab }) => {
   );
 };
 
-// --- ALL PERSONNEL DIRECTORY (WITH TEST ACCOUNT GENERATOR) ---
-const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserModal, handleDeleteMember, copyId, isSysAdmin }) => {
+// --- ALL PERSONNEL DIRECTORY ---
+const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserModal, handleDeleteMember, copyId, isSysAdmin, currentUserLevel, hasPerm }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTeam, setFilterTeam] = useState('ALL');
 
@@ -246,28 +243,16 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
           <p className="text-gray-500 dark:text-slate-400 mt-2 font-medium">Global directory of all active community members.</p>
         </div>
         <div className="flex w-full lg:w-auto space-x-3">
-          {/* SYSTEM OWNER ONLY: Test Account Generator */}
           {isSysAdmin && (
             <button onClick={() => setTestUserModal(true)} className="px-4 py-3 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-2xl font-black flex items-center space-x-2 transition-all shadow-sm border border-red-200 dark:border-red-800">
               <Beaker size={18} /> <span className="hidden xl:inline">Test Account</span>
             </button>
           )}
-
           <div className="relative flex-1 lg:w-64">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search Name, City ID, Discord..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 focus:ring-2 focus:ring-red-500 outline-none dark:text-white shadow-sm"
-            />
+            <input type="text" placeholder="Search Name, City ID, Discord..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 focus:ring-2 focus:ring-red-500 outline-none dark:text-white shadow-sm" />
           </div>
-          <select 
-            value={filterTeam} 
-            onChange={(e) => setFilterTeam(e.target.value)}
-            className="w-48 px-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 outline-none dark:text-white font-bold shadow-sm appearance-none focus:ring-2 focus:ring-red-500"
-          >
+          <select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)} className="w-48 px-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 outline-none dark:text-white font-bold shadow-sm appearance-none focus:ring-2 focus:ring-red-500">
             <option value="ALL">All Teams</option>
             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
@@ -278,7 +263,8 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
         <div className="grid gap-4 relative z-10">
           {filteredMembers.map(member => {
             const team = teams.find(t => t.id === member.teamId) || { name: 'Unknown', color: '#ef4444' };
-            const role = roles.find(r => r.id === member.roleId) || { name: 'Unranked' };
+            const role = roles.find(r => r.id === member.roleId) || { name: 'Unranked', order: 999 };
+            const canManage = hasPerm('ADMINISTRATOR') || currentUserLevel < (role.order || 999);
             
             return (
               <div key={member.id} className="flex flex-col lg:flex-row justify-between items-center p-5 bg-gray-50/50 dark:bg-slate-800/50 rounded-[2rem] border border-gray-100 dark:border-slate-700/50 group hover:border-red-400 dark:hover:border-red-500 transition-all duration-300">
@@ -293,15 +279,9 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
                         {member.isMentor && <Star size={16} className="text-yellow-500 fill-yellow-500" title="Mentor" />}
                         {member.isTestAccount && <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[10px] px-2 py-1 rounded-lg tracking-widest border border-purple-200 dark:border-purple-800">TEST BOT</span>}
                       </h4>
-                      <span className="flex items-center space-x-1 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-2 py-1 rounded-lg shadow-sm">
-                        <MapPin size={10}/><span>ID: {member.cityId || '000'}</span>
-                      </span>
-                      <span className="text-white text-[9px] font-black uppercase px-2 py-1 rounded-lg tracking-[0.2em] shadow-sm" style={{ backgroundColor: team.color }}>
-                        {team.name}
-                      </span>
-                      <span className="text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 text-[9px] font-black uppercase px-2 py-1 rounded-lg tracking-widest">
-                        {role.name}
-                      </span>
+                      <span className="flex items-center space-x-1 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-2 py-1 rounded-lg shadow-sm"><MapPin size={10}/><span>ID: {member.cityId || '000'}</span></span>
+                      <span className="text-white text-[9px] font-black uppercase px-2 py-1 rounded-lg tracking-[0.2em] shadow-sm" style={{ backgroundColor: team.color }}>{team.name}</span>
+                      <span className="text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 text-[9px] font-black uppercase px-2 py-1 rounded-lg tracking-widest">{role.name}</span>
                     </div>
                     <div className="flex items-center space-x-2 mt-2">
                       <div className="px-2 py-1 bg-[#5865F2]/10 border border-[#5865F2]/20 rounded-lg text-[10px] font-mono text-[#5865F2] dark:text-[#5865F2] font-black tracking-tight">{member.discordId}</div>
@@ -310,13 +290,16 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
                   </div>
                 </div>
                 <div className="flex space-x-2 mt-4 lg:mt-0 w-full lg:w-auto justify-end">
-                  <button onClick={() => setMemberModal({ isOpen: true, data: member, teamId: member.teamId })} className="p-3 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all"><Edit size={18} /></button>
-                  <button onClick={() => handleDeleteMember(member.id)} className="p-3 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all"><Trash2 size={18} /></button>
+                  {canManage && (
+                    <>
+                      <button onClick={() => setMemberModal({ isOpen: true, data: member, teamId: member.teamId })} className="p-3 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all"><Edit size={18} /></button>
+                      <button onClick={() => handleDeleteMember(member.id)} className="p-3 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all"><Trash2 size={18} /></button>
+                    </>
+                  )}
                 </div>
               </div>
             );
           })}
-          
           {filteredMembers.length === 0 && (
              <div className="p-16 text-center bg-gray-50 dark:bg-slate-800/30 rounded-[2.5rem] border-2 border-dashed border-gray-200 dark:border-slate-800">
                 <Users size={40} className="mx-auto mb-4 text-slate-300 dark:text-slate-700" />
@@ -329,10 +312,10 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserMo
   );
 };
 
-// --- TEAM SETUP (3-TIER HIERARCHY) ---
+// --- TEAM SETUP ---
 const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setCategoryModal, setMasterCategoryModal }) => {
   const handleBulkImport = async () => {
-    const input = prompt("Enter team names separated by commas (e.g. Alpha, Bravo, Charlie):");
+    const input = prompt("Enter team names separated by commas:");
     if (!input) return;
     const names = input.split(',').map(n => n.trim()).filter(n => n);
     if (names.length === 0) return;
@@ -344,13 +327,11 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
         batch.set(ref, { id, name, color: '#ef4444', order: Date.now() + idx }); 
       });
       await batch.commit();
-      alert(`Successfully imported ${names.length} teams.`);
+      alert(`Imported ${names.length} teams.`);
     } catch (e) { alert("Bulk import failed."); }
   };
 
-  const handleDeleteTeam = async (id, name) => {
-    if (window.confirm(`Delete the ${name} team?`)) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', id));
-  };
+  const handleDeleteTeam = async (id, name) => { if (window.confirm(`Delete the ${name} team?`)) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teams', id)); };
   const handleDeleteCategory = async (id, name) => {
     if (window.confirm(`Delete Sub Category "${name}"? Teams inside will become uncategorized.`)) {
       const batch = writeBatch(db);
@@ -402,8 +383,7 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
   );
 
   const organizedHierarchy = masterCategories.sort((a,b) => (a.order||0) - (b.order||0)).map(mc => ({
-    ...mc,
-    subCategories: categories.filter(c => c.masterCategoryId === mc.id).sort((a,b) => (a.order||0) - (b.order||0)).map(sc => ({
+    ...mc, subCategories: categories.filter(c => c.masterCategoryId === mc.id).sort((a,b) => (a.order||0) - (b.order||0)).map(sc => ({
       ...sc, teams: teams.filter(t => t.categoryId === sc.id).sort((a,b) => (a.order||0) - (b.order||0))
     }))
   }));
@@ -419,9 +399,9 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-4">
         <div><h2 className="text-3xl font-black dark:text-white uppercase">Team Setup</h2><p className="text-slate-500">Manage categories, divisions, and assignments.</p></div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setMasterCategoryModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><Layers size={16}/><span>Master Cat</span></button>
-          <button onClick={() => setCategoryModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><Folder size={16}/><span>Sub Cat</span></button>
-          <button onClick={handleBulkImport} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><UploadCloud size={16}/><span>Bulk</span></button>
+          <button onClick={() => setMasterCategoryModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><Layers size={16}/><span>Master Cat</span></button>
+          <button onClick={() => setCategoryModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><Folder size={16}/><span>Sub Cat</span></button>
+          <button onClick={handleBulkImport} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2 text-sm"><UploadCloud size={16}/><span>Bulk</span></button>
           <button onClick={() => setTeamModal({ isOpen: true, data: null })} className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black flex items-center space-x-2 shadow-lg shadow-red-600/20 text-sm"><Plus size={16}/><span>Add Team</span></button>
         </div>
       </div>
@@ -432,16 +412,11 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
             <div className="flex items-center justify-between mb-6 border-b border-gray-200 dark:border-slate-700 pb-4">
               <div className="flex items-center space-x-3 text-slate-800 dark:text-white">
                 <div className="p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-600"><Layers size={20} className="text-red-500" /></div>
-                <div>
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">{mc.name}</h3>
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
-                    Roles: {mc.assignedRoles?.length||0} | Users: {mc.assignedMembers?.length||0}
-                  </div>
-                </div>
+                <div><h3 className="text-2xl font-black uppercase tracking-tighter">{mc.name}</h3><div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Roles: {mc.assignedRoles?.length||0} | Users: {mc.assignedMembers?.length||0}</div></div>
               </div>
               <div className="flex space-x-2">
-                <button onClick={() => setMasterCategoryModal({ isOpen: true, data: mc })} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700"><Edit size={16}/></button>
-                <button onClick={() => handleDeleteMasterCategory(mc.id, mc.name)} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-500 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700"><Trash2 size={16}/></button>
+                <button onClick={() => setMasterCategoryModal({ isOpen: true, data: mc })} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 rounded-xl shadow-sm"><Edit size={16}/></button>
+                <button onClick={() => handleDeleteMasterCategory(mc.id, mc.name)} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-500 rounded-xl shadow-sm"><Trash2 size={16}/></button>
               </div>
             </div>
             
@@ -449,22 +424,17 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
               {mc.subCategories.map(cat => (
                 <div key={cat.id} className="bg-white/50 dark:bg-slate-900/50 p-5 rounded-[2rem] border border-gray-100 dark:border-slate-700/50">
                   <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <div className="flex items-center space-x-2 text-red-500"><Folder size={16} /><h4 className="text-lg font-black uppercase tracking-tight">{cat.name}</h4></div>
-                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 ml-6">Roles: {cat.assignedRoles?.length||0} | Users: {cat.assignedMembers?.length||0}</div>
-                    </div>
+                    <div><div className="flex items-center space-x-2 text-red-500"><Folder size={16} /><h4 className="text-lg font-black uppercase tracking-tight">{cat.name}</h4></div><div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 ml-6">Roles: {cat.assignedRoles?.length||0} | Users: {cat.assignedMembers?.length||0}</div></div>
                     <div className="flex space-x-2">
-                      <button onClick={() => setCategoryModal({ isOpen: true, data: cat })} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700"><Edit size={14}/></button>
-                      <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-500 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700"><Trash2 size={14}/></button>
+                      <button onClick={() => setCategoryModal({ isOpen: true, data: cat })} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 rounded-xl shadow-sm"><Edit size={14}/></button>
+                      <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-500 rounded-xl shadow-sm"><Trash2 size={14}/></button>
                     </div>
                   </div>
                   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 ml-6">
                     {cat.teams.map((team, index) => renderTeamCard(team, index, cat.teams.length))}
-                    {cat.teams.length === 0 && <div className="text-xs font-bold text-slate-400 italic p-2 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-2xl text-center">No teams in this sub-category.</div>}
                   </div>
                 </div>
               ))}
-              {mc.subCategories.length === 0 && <div className="text-sm font-bold text-slate-400 italic p-4">No Sub Categories assigned.</div>}
             </div>
           </div>
         ))}
@@ -478,8 +448,8 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-2 text-slate-500"><Folder size={16} /><h4 className="text-lg font-black uppercase tracking-tight">{cat.name}</h4></div>
                     <div className="flex space-x-2">
-                      <button onClick={() => setCategoryModal({ isOpen: true, data: cat })} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700"><Edit size={14}/></button>
-                      <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-500 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700"><Trash2 size={14}/></button>
+                      <button onClick={() => setCategoryModal({ isOpen: true, data: cat })} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-blue-500 rounded-xl shadow-sm"><Edit size={14}/></button>
+                      <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="p-2 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-500 rounded-xl shadow-sm"><Trash2 size={14}/></button>
                     </div>
                   </div>
                   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 ml-6">
@@ -506,6 +476,8 @@ const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setC
 
 // --- ROLE MANAGEMENT ---
 const RoleManagementView = ({ roles, setRoleModal }) => {
+  const sortedRoles = [...roles].sort((a, b) => (a.order || 0) - (b.order || 0));
+
   const handleBulkImport = async () => {
     const input = prompt("Enter role names separated by commas:");
     if (!input) return;
@@ -513,10 +485,10 @@ const RoleManagementView = ({ roles, setRoleModal }) => {
     if (names.length === 0) return;
     try {
       const batch = writeBatch(db);
-      names.forEach(name => {
+      names.forEach((name, idx) => {
         const id = `r${Date.now()}${Math.random().toString(36).substr(2, 5)}`;
         const ref = doc(db, 'artifacts', appId, 'public', 'data', 'roles', id);
-        batch.set(ref, { id, name, scope: 'TEAM', isManagement: false, customPerms: [] });
+        batch.set(ref, { id, name, scope: 'TEAM', isManagement: false, customPerms: [], order: Date.now() + idx });
       });
       await batch.commit();
       alert(`Imported ${names.length} roles.`);
@@ -527,20 +499,38 @@ const RoleManagementView = ({ roles, setRoleModal }) => {
     if (window.confirm(`Delete the ${name} role?`)) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'roles', id));
   };
 
+  const moveRole = async (roleId, direction) => {
+    const currentIndex = sortedRoles.findIndex(r => r.id === roleId);
+    if (direction === 'up' && currentIndex > 0) {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', sortedRoles[currentIndex].id), { order: sortedRoles[currentIndex-1].order || (currentIndex-1) });
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', sortedRoles[currentIndex-1].id), { order: sortedRoles[currentIndex].order || currentIndex });
+      await batch.commit();
+    } else if (direction === 'down' && currentIndex < sortedRoles.length - 1) {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', sortedRoles[currentIndex].id), { order: sortedRoles[currentIndex+1].order || (currentIndex+1) });
+      batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'roles', sortedRoles[currentIndex+1].id), { order: sortedRoles[currentIndex].order || currentIndex });
+      await batch.commit();
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm animate-fade-in">
       <div className="flex justify-between items-center mb-8">
-        <div><h2 className="text-3xl font-black dark:text-white uppercase">Role Management</h2><p className="text-slate-500">Define hierarchy and access levels.</p></div>
+        <div><h2 className="text-3xl font-black dark:text-white uppercase">Role Hierarchy</h2><p className="text-slate-500">Define chain of command and access levels.</p></div>
         <div className="flex space-x-3">
           <button onClick={handleBulkImport} className="px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-black flex items-center space-x-2"><UploadCloud size={18}/><span>Bulk Import</span></button>
           <button onClick={() => setRoleModal({ isOpen: true, data: null })} className="px-6 py-3 bg-red-600 text-white rounded-2xl font-black flex items-center space-x-2 shadow-lg shadow-red-600/20"><Plus size={18}/><span>Add Role</span></button>
         </div>
       </div>
       <div className="space-y-3">
-        {roles.map(role => (
+        {sortedRoles.map((role, index) => (
           <div key={role.id} className="p-5 border border-gray-100 dark:border-slate-700 rounded-3xl flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50 hover:border-red-400 transition-all group">
             <div className="flex items-center space-x-6">
-              <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center border border-gray-100 dark:border-slate-700 shadow-sm"><Shield size={20} className="text-red-500"/></div>
+              <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-2xl flex flex-col items-center justify-center border border-gray-100 dark:border-slate-700 shadow-sm">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rank</span>
+                <span className="font-black text-red-600 dark:text-red-400 leading-none">{index + 1}</span>
+              </div>
               <div>
                 <div className="font-black text-lg dark:text-white uppercase flex items-center space-x-3">
                   <span>{role.name}</span>
@@ -550,6 +540,11 @@ const RoleManagementView = ({ roles, setRoleModal }) => {
               </div>
             </div>
             <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+               <div className="flex flex-col mr-2 bg-white dark:bg-slate-900 rounded-lg overflow-hidden border border-gray-100 dark:border-slate-700 shadow-sm">
+                 <button disabled={index === 0} onClick={() => moveRole(role.id, 'up')} className="px-2 py-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-500 disabled:opacity-20"><ChevronUp size={14}/></button>
+                 <div className="h-px bg-gray-100 dark:bg-slate-700"></div>
+                 <button disabled={index === sortedRoles.length - 1} onClick={() => moveRole(role.id, 'down')} className="px-2 py-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-500 disabled:opacity-20"><ChevronDown size={14}/></button>
+               </div>
               <button onClick={() => setRoleModal({ isOpen: true, data: role })} className="p-3 text-slate-400 hover:text-blue-600 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 shadow-sm rounded-xl"><Edit size={18}/></button>
               <button onClick={() => handleDeleteRole(role.id, role.name)} className="p-3 text-slate-400 hover:text-red-600 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 shadow-sm rounded-xl"><Trash2 size={18}/></button>
             </div>
@@ -621,9 +616,7 @@ export default function App() {
 
   useEffect(() => {
     const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (err) { console.error("Auth Fail:", err.message); }
+      try { await signInAnonymously(auth); } catch (err) { console.error("Auth Fail:", err.message); }
     };
     initAuth();
 
@@ -639,6 +632,12 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
+  const getRoleLevel = (roleId) => {
+    if (roleId === 'superadmin_virtual') return -1;
+    const role = roles.find(r => r.id === roleId);
+    return role ? (role.order || 999) : 1000;
+  };
+
   const currentUserRole = useMemo(() => {
     if (currentUser?.id === 'superadmin') {
       return { id: 'superadmin_virtual', name: 'System Owner', scope: 'ALL', permissions: AVAILABLE_PERMISSIONS.map(p => p.id), customPerms: AVAILABLE_PERMISSIONS.map(p => p.id), isManagement: true };
@@ -646,9 +645,10 @@ export default function App() {
     return roles.find(r => r.id === currentUser?.roleId);
   }, [roles, currentUser]);
 
+  const currentUserLevel = currentUser?.id === 'superadmin' ? -1 : getRoleLevel(currentUser?.roleId);
   const hasPerm = (permId) => currentUser?.id === 'superadmin' || currentUserRole?.permissions?.includes('ADMINISTRATOR') || currentUserRole?.permissions?.includes(permId) || currentUser?.customPerms?.includes(permId);
   const isGlobalAdmin = currentUser?.isSystemAdmin || hasPerm('ADMINISTRATOR') || currentUserRole?.scope === 'MANAGEMENT' || currentUserRole?.scope === 'ALL';
-  const isSysAdmin = currentUser?.isSystemAdmin;
+  const isSysAdmin = currentUser?.isSystemAdmin || currentUser?.id === 'superadmin';
 
   const handleDiscordLogin = async () => {
     const provider = new OAuthProvider('oidc.discord');
@@ -710,7 +710,8 @@ export default function App() {
   const handleSaveRole = async (e, rData) => {
     e.preventDefault();
     const id = rData.id || `r${Date.now()}`;
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'roles', id), { ...rData, id }, { merge: true });
+    const order = rData.order || Date.now();
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'roles', id), { ...rData, id, order }, { merge: true });
     setRoleModal({ isOpen: false, data: null });
   };
 
@@ -736,19 +737,12 @@ export default function App() {
     if (currentUser?.id === memberId) handleLogout();
   };
 
-  const toggleLoggedMode = () => {
-    setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug }));
-    if (!currentUser.isDebug) setLogs([]);
-  };
-
+  const toggleLoggedMode = () => { setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug })); if (!currentUser.isDebug) setLogs([]); };
   const handleToggleDarkMode = async () => {
     const newState = !currentUser.darkMode;
     setCurrentUser({ ...currentUser, darkMode: newState });
-    if (currentUser.id !== 'superadmin' && !currentUser.isDebug) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', currentUser.id), { darkMode: newState }, { merge: true });
-    }
+    if (currentUser.id !== 'superadmin' && !currentUser.isDebug) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', currentUser.id), { darkMode: newState }, { merge: true }); }
   };
-
   const handleLogout = () => { setCurrentUser(null); setActiveTab('dashboard'); setLogs([]); document.documentElement.classList.remove('dark'); };
   const copyId = (text) => { navigator.clipboard.writeText(text); alert("ID Copied: " + text); };
 
@@ -757,11 +751,7 @@ export default function App() {
       <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center p-4 selection:bg-[#ef4444] selection:text-white">
         <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl w-full max-w-md relative overflow-hidden text-center">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-50"></div>
-          <div className="flex justify-center mb-8">
-            <div className="bg-red-600 p-4 rounded-xl text-white shadow-2xl shadow-red-600/20 rotate-3">
-              <Crown size={40} strokeWidth={2.5} />
-            </div>
-          </div>
+          <div className="flex justify-center mb-8"><div className="bg-red-600 p-4 rounded-xl text-white shadow-2xl shadow-red-600/20 rotate-3"><Crown size={40} strokeWidth={2.5} /></div></div>
           <h2 className="text-3xl font-black mb-2 text-white uppercase tracking-tighter">{authView === 'login' ? 'KNG Staff Control' : authView === 'admin_login' ? 'Override' : 'Request'}</h2>
           <p className="text-slate-500 text-sm mb-8 font-medium">Management Terminal</p>
 
@@ -818,11 +808,7 @@ export default function App() {
       try {
         const id = `test_${Date.now()}`;
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', id), { 
-          ...formData, 
-          id, 
-          status: 'active', 
-          isTestAccount: true, 
-          cityId: 'TEST-000' 
+          ...formData, id, status: 'active', isTestAccount: true, cityId: 'TEST-000' 
         }, { merge: true });
         setTestUserModal(false);
         alert(`Test Account Created!\nUsername: ${formData.discordId}\nPassword: ${formData.password}\n\nLog out and use the Admin Bypass form to log in.`);
@@ -856,6 +842,10 @@ export default function App() {
     if (!memberModal.isOpen) return null;
     const isEdit = !!memberModal.data;
     const [formData, setFormData] = useState(memberModal.data || { name: '', cityId: '', discordId: '', teamId: memberModal.teamId || '', roleId: '', isMentor: false });
+    
+    // Filter roles for dropdown based on Hierarchy
+    const availableRolesToAssign = roles.filter(r => hasPerm('ADMINISTRATOR') || currentUserLevel < (r.order || 999)).sort((a,b)=>(a.order||0)-(b.order||0));
+
     return (
       <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
         <form onSubmit={(e) => handleSaveMember(e, formData)} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-md border border-gray-100 dark:border-slate-800 shadow-2xl">
@@ -866,15 +856,19 @@ export default function App() {
             <input required className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 font-mono text-sm focus:ring-2 focus:ring-red-500" placeholder="Discord User ID" value={formData.discordId} onChange={e => setFormData({...formData, discordId: e.target.value})} />
             <div className="flex space-x-2">
               <select required className="w-1/2 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-red-500" value={formData.teamId} onChange={e => setFormData({...formData, teamId: e.target.value})}><option value="" disabled>Assign Team...</option>{teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-              <select required className="w-1/2 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-red-500" value={formData.roleId} onChange={e => setFormData({...formData, roleId: e.target.value})}><option value="" disabled>Assign Rank...</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+              <select required className="w-1/2 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-red-500" value={formData.roleId} onChange={e => setFormData({...formData, roleId: e.target.value})}>
+                <option value="" disabled>Assign Rank...</option>
+                {availableRolesToAssign.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
             </div>
+            {availableRolesToAssign.length === 0 && <p className="text-xs text-red-500 font-bold">You do not have the required rank to promote/assign roles.</p>}
             <label className="flex items-center space-x-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 cursor-pointer hover:border-red-500 transition-colors">
               <input type="checkbox" checked={formData.isMentor} onChange={e => setFormData({...formData, isMentor: e.target.checked})} className="w-5 h-5 rounded text-red-600 focus:ring-red-500" />
               <span className="font-black dark:text-white flex items-center space-x-2"><Star size={16} className="text-yellow-500 fill-yellow-500"/><span>Designate as Mentor</span></span>
             </label>
           </div>
           <div className="flex space-x-3">
-            <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white p-4 rounded-2xl font-black shadow-lg shadow-red-600/20 transition-all">Save</button>
+            <button type="submit" disabled={availableRolesToAssign.length === 0} className="flex-1 bg-red-600 hover:bg-red-700 text-white p-4 rounded-2xl font-black shadow-lg shadow-red-600/20 transition-all disabled:opacity-50">Save</button>
             <button type="button" onClick={() => setMemberModal({isOpen:false})} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-4 rounded-2xl font-black transition-colors">Cancel</button>
           </div>
         </form>
@@ -1060,7 +1054,7 @@ export default function App() {
         )}
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 max-w-7xl mx-auto w-full">
           {activeTab === 'dashboard' && <Dashboard teams={teams} members={members} setActiveTab={setActiveTab} />}
-          {activeTab === 'all-personnel' && <AllPersonnelView members={members} teams={teams} roles={roles} setMemberModal={setMemberModal} setTestUserModal={setTestUserModal} handleDeleteMember={handleDeleteMember} copyId={copyId} isSysAdmin={isSysAdmin} />}
+          {activeTab === 'all-personnel' && <AllPersonnelView members={members} teams={teams} roles={roles} setMemberModal={setMemberModal} setTestUserModal={setTestUserModal} handleDeleteMember={handleDeleteMember} copyId={copyId} isSysAdmin={isSysAdmin} currentUserLevel={currentUserLevel} hasPerm={hasPerm} />}
           {activeTab === 'teams-setup' && <TeamSetupView teams={teams} categories={categories} masterCategories={masterCategories} setTeamModal={setTeamModal} setCategoryModal={setCategoryModal} setMasterCategoryModal={setMasterCategoryModal} />}
           {activeTab === 'roles' && <RoleManagementView roles={roles} setRoleModal={setRoleModal} />}
           {activeTab === 'requests' && (
@@ -1122,6 +1116,7 @@ export default function App() {
              </div>
           )}
           
+          {/* Dynamic Team Rosters */}
           {!['dashboard', 'all-personnel', 'teams-setup', 'roles', 'requests', 'permissions'].includes(activeTab) && (
             <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-800 animate-fade-in relative overflow-hidden">
               <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none" style={{ color: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}><Users size={200} /></div>
@@ -1138,34 +1133,43 @@ export default function App() {
               </div>
 
               <div className="grid gap-6 relative z-10">
-                {members.filter(m => m.teamId === activeTab && m.status === 'active').map(member => (
-                  <div key={member.id} className="flex flex-col lg:flex-row justify-between items-center p-6 bg-gray-50/50 dark:bg-slate-800/50 rounded-[2.5rem] border border-gray-100 dark:border-slate-700/50 group hover:border-red-400 dark:hover:border-red-500 transition-all duration-300">
-                    <div className="flex items-center space-x-6 w-full">
-                      <div className="w-16 h-16 bg-white dark:bg-slate-700 rounded-2xl flex items-center justify-center font-black text-2xl border border-gray-100 dark:border-slate-600 shadow-sm transition-transform group-hover:scale-105" style={{ color: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}>
-                        {member.name.charAt(0).toUpperCase()}
+                {members.filter(m => m.teamId === activeTab && m.status === 'active').map(member => {
+                  const role = roles.find(r => r.id === member.roleId) || { name: 'Unranked', order: 999 };
+                  const canManage = hasPerm('ADMINISTRATOR') || currentUserLevel < (role.order || 999);
+
+                  return (
+                    <div key={member.id} className="flex flex-col lg:flex-row justify-between items-center p-6 bg-gray-50/50 dark:bg-slate-800/50 rounded-[2.5rem] border border-gray-100 dark:border-slate-700/50 group hover:border-red-400 dark:hover:border-red-500 transition-all duration-300">
+                      <div className="flex items-center space-x-6 w-full">
+                        <div className="w-16 h-16 bg-white dark:bg-slate-700 rounded-2xl flex items-center justify-center font-black text-2xl border border-gray-100 dark:border-slate-600 shadow-sm transition-transform group-hover:scale-105" style={{ color: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}>
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h4 className="font-black text-xl text-gray-900 dark:text-white flex items-center space-x-2">
+                              <span>{member.name}</span>
+                              {member.isMentor && <Star size={18} className="text-yellow-500 fill-yellow-500" title="Mentor" />}
+                              {member.isTestAccount && <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[10px] px-2 py-1 rounded-lg tracking-widest border border-purple-200 dark:border-purple-800">TEST BOT</span>}
+                            </h4>
+                            <span className="flex items-center space-x-1.5 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-sm"><MapPin size={12}/><span>City ID: {member.cityId || '000'}</span></span>
+                            <span className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-[0.2em] shadow-lg" style={{ backgroundColor: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}>{role.name}</span>
+                          </div>
+                          <div className="flex items-center space-x-3 mt-3">
+                            <div className="px-3 py-2 bg-[#5865F2]/10 border border-[#5865F2]/20 rounded-xl text-[11px] font-mono text-[#5865F2] dark:text-[#5865F2] font-black tracking-tight">{member.discordId}</div>
+                            <button onClick={() => copyId(member.discordId)} className="text-slate-400 hover:text-[#5865F2] dark:hover:text-[#5865F2] transition-colors p-2 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm" title="Copy Unique ID"><Copy size={16}/></button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <h4 className="font-black text-xl text-gray-900 dark:text-white flex items-center space-x-2">
-                            <span>{member.name}</span>
-                            {member.isMentor && <Star size={18} className="text-yellow-500 fill-yellow-500" title="Mentor" />}
-                            {member.isTestAccount && <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[10px] px-2 py-1 rounded-lg tracking-widest border border-purple-200 dark:border-purple-800">TEST BOT</span>}
-                          </h4>
-                          <span className="flex items-center space-x-1.5 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-sm"><MapPin size={12}/><span>City ID: {member.cityId || '000'}</span></span>
-                          <span className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-[0.2em] shadow-lg" style={{ backgroundColor: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}>{roles.find(r => r.id === member.roleId)?.name || 'UNRANKED'}</span>
-                        </div>
-                        <div className="flex items-center space-x-3 mt-3">
-                          <div className="px-3 py-2 bg-[#5865F2]/10 border border-[#5865F2]/20 rounded-xl text-[11px] font-mono text-[#5865F2] dark:text-[#5865F2] font-black tracking-tight">{member.discordId}</div>
-                          <button onClick={() => copyId(member.discordId)} className="text-slate-400 hover:text-[#5865F2] dark:hover:text-[#5865F2] transition-colors p-2 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm" title="Copy Unique ID"><Copy size={16}/></button>
-                        </div>
+                      <div className="flex space-x-3 mt-6 lg:mt-0 w-full lg:w-auto justify-end">
+                        {canManage && (
+                          <>
+                            <button onClick={() => setMemberModal({ isOpen: true, data: member, teamId: activeTab })} className="p-4 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all"><Edit size={20} /></button>
+                            <button onClick={() => handleDeleteMember(member.id)} className="p-4 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all"><Trash2 size={20} /></button>
+                          </>
+                        )}
                       </div>
                     </div>
-                    <div className="flex space-x-3 mt-6 lg:mt-0 w-full lg:w-auto justify-end">
-                      <button onClick={() => setMemberModal({ isOpen: true, data: member, teamId: activeTab })} className="p-4 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all"><Edit size={20} /></button>
-                      <button onClick={() => handleDeleteMember(member.id)} className="p-4 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all"><Trash2 size={20} /></button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {members.filter(m => m.teamId === activeTab && m.status === 'active').length === 0 && <div className="p-20 text-center bg-gray-50 dark:bg-slate-800/30 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-slate-800 animate-pulse"><Users size={48} className="mx-auto mb-4 text-slate-300 dark:text-slate-700" /><p className="text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest text-sm">No Active Personnel Found</p></div>}
               </div>
             </div>
@@ -1175,7 +1179,7 @@ export default function App() {
       {currentUser.isDebug && (
         <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/95 border-t-4 border-red-600 text-green-400 font-mono flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
           <div className="bg-red-600 text-white px-6 py-3 flex justify-between items-center font-black text-xs tracking-widest shrink-0">
-            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v5.4</span></div>
+            <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v6.0</span></div>
             <div className="flex items-center space-x-6">
                <button onClick={() => setLogs([])} className="hover:underline">FLUSH_LOGS</button>
                <button onClick={toggleLoggedMode} className="bg-white/20 px-2 py-1 rounded hover:bg-white/40 transition-colors uppercase font-black text-[9px]">Terminate Session</button>
