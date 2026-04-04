@@ -7,7 +7,6 @@ import {
   Briefcase, Bell, Globe, ChevronRight, UploadCloud, Crown
 } from 'lucide-react';
 
-// FIXED: Reverted to importing your actual configured Firebase instance
 import { auth, db } from './firebase-config.js';
 import { 
   collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, writeBatch 
@@ -20,7 +19,6 @@ import {
 const YOUR_DISCORD_ID = "826277251414360075"; 
 const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
 const MASTER_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "admin"; 
-// FIXED: Reverted to your original DB path so your data doesn't disappear
 const appId = "community-manager"; 
 
 // --- SECURITY UTILITY: PII MASKING ---
@@ -389,6 +387,14 @@ export default function App() {
   const toggleLoggedMode = () => {
     setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug }));
     if (!currentUser.isDebug) setLogs([]);
+  };
+
+  const handleToggleDarkMode = async () => {
+    const newState = !currentUser.darkMode;
+    setCurrentUser({ ...currentUser, darkMode: newState });
+    if (currentUser.id !== 'superadmin' && !currentUser.isDebug) {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', currentUser.id), { darkMode: newState }, { merge: true });
+    }
   };
 
   const handleLogout = () => { setCurrentUser(null); setActiveTab('dashboard'); setLogs([]); document.documentElement.classList.remove('dark'); };
