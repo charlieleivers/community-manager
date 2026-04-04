@@ -3,7 +3,7 @@ import {
   Users, Shield, Settings, LayoutDashboard, Plus, 
   Trash2, Edit, ChevronUp, ChevronDown, Star,
   MoveRight, Scissors, Merge, Check, X,
-  AlertCircle, Lock, Key, LogOut, UserCheck, Moon, Sun, Sliders, Terminal, Copy, MapPin, Search, Activity
+  AlertCircle, Lock, Key, LogOut, UserCheck, Moon, Sun, Sliders, Terminal, Copy, MapPin, Search, Activity, Eye, EyeOff
 } from 'lucide-react';
 
 import { auth, db } from './firebase-config.js';
@@ -24,15 +24,13 @@ import MemberModal from './modals/MemberModal';
 import TeamModal from './modals/TeamModal';
 import RoleModal from './modals/RoleModal';
 
-// --- CONFIGURATION & GLOBAL UTILITIES ---
+// --- CONFIGURATION ---
 const MASTER_ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 const YOUR_DISCORD_ID = "826277251414360075"; 
 const SENSITIVE_KEYS = ['password', 'token', 'secret', 'cvv', 'apiKey'];
 const appId = "community-manager";
 
-/** * SECURITY FIX: Data Masking Utility 
- * This is now outside the component to prevent re-declaration crashes.
- */
+// --- SECURITY FIX: DATA MASKING ---
 const maskSensitiveData = (data) => {
     if (!data || typeof data !== 'object') return data;
     try {
@@ -107,7 +105,7 @@ export default function App() {
     }
   }, [currentUser?.darkMode]);
 
-  // --- GLOBAL DEBUG INTERCEPTOR (LOGGED MODE) ---
+  // --- GLOBAL DEBUG INTERCEPTOR (THE SECURITY FIX) ---
   useEffect(() => {
     if (currentUser?.isDebug) {
       const originalLog = console.log;
@@ -131,7 +129,7 @@ export default function App() {
         originalWarn(...args);
       };
 
-      console.log("Debug Mode Active. Data Sanitization [ENABLED]");
+      console.log("Debug System Online. Redaction Interceptor Active.");
 
       return () => {
         console.log = originalLog;
@@ -177,18 +175,8 @@ export default function App() {
           setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
       );
-
-      // STEP 4: Auto-expiration check for Debug Mode
-      const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings', 'systemConfig'), (snap) => {
-          if (snap.exists()) {
-              const data = snap.data();
-              if (data.debug_enabled && Date.now() > data.debug_expires_at) {
-                  setDoc(doc(db, 'artifacts', appId, 'public', 'settings', 'systemConfig'), { debug_enabled: false }, { merge: true });
-              }
-          }
-      });
       
-      return () => { unsubTeams(); unsubRoles(); unsubMembers(); unsubConfig(); };
+      return () => { unsubTeams(); unsubRoles(); unsubMembers(); };
     });
 
     return () => unsubAuth();
@@ -214,13 +202,12 @@ export default function App() {
           isSystemAdmin: true, 
           status: 'active', 
           darkMode: true,
-          isDebug: true 
+          isDebug: false 
         });
         return;
       }
 
       const match = members.find(m => m.discordId === discordUID && m.status === 'active');
-      
       if (match) {
         setCurrentUser(match);
       } else {
@@ -228,16 +215,13 @@ export default function App() {
         await auth.signOut();
       }
     } catch (error) {
-      console.error("OAuth Error:", error.message);
       alert(`Discord Login Failed: ${error.message}`);
     }
   };
 
-  const toggleDebugMode = async (user, durationMinutes) => {
-      if (!user.isSystemAdmin) throw new Error("Unauthorized");
-      const expiresAt = Date.now() + (durationMinutes * 60 * 1000);
-      const docRef = doc(db, 'artifacts', appId, 'public', 'settings', 'systemConfig');
-      await setDoc(docRef, { debug_enabled: true, debug_expires_at: expiresAt, enabled_by: user.id }, { merge: true });
+  const toggleLoggedMode = () => {
+      setCurrentUser(prev => ({ ...prev, isDebug: !prev.isDebug }));
+      if (!currentUser.isDebug) setLogs([]);
   };
 
   const handleAdminLogin = (e) => {
@@ -247,7 +231,7 @@ export default function App() {
       return;
     }
     if (authForm.discordId === 'admin' && authForm.password === MASTER_ADMIN_PASSWORD) {
-      setCurrentUser({ id: 'superadmin', name: 'System Admin', isSystemAdmin: true, status: 'active', darkMode: true });
+      setCurrentUser({ id: 'superadmin', name: 'System Admin', isSystemAdmin: true, status: 'active', darkMode: true, isDebug: false });
       return;
     }
     const user = members.find(m => m.discordId === authForm.discordId && m.password === authForm.password);
@@ -338,7 +322,7 @@ export default function App() {
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center p-4 selection:bg-[#5865F2] selection:text-white">
-        <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl w-full max-w-md relative overflow-hidden">
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-2xl w-full max-md relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#5865F2] to-transparent opacity-50"></div>
           
           <div className="flex justify-center mb-8">
@@ -435,6 +419,7 @@ export default function App() {
                   <p className="text-xs text-slate-400 font-medium px-4 leading-relaxed">
                     Final Step: Link your Discord account. This will automatically pull your unique identity for management to verify.
                   </p>
+                  
                   <button onClick={handleLinkAndSubmit} className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white p-6 rounded-2xl font-black shadow-2xl shadow-[#5865F2]/20 flex justify-center items-center space-x-4 transition-all active:scale-95 group">
                     <img src="https://cdn.prod.website-files.com/6257adef93867e3d0390e21b/6257adef93867e38ca90e22b_Discord-Logo-White.svg" width="28" alt="" className="group-hover:scale-110 transition-transform" />
                     <span className="text-lg">Link & Submit</span>
@@ -463,8 +448,23 @@ export default function App() {
       />
       
       <div className={`flex-1 flex flex-col overflow-hidden ${currentUser.isDebug ? 'pb-64' : ''}`}>
+        
+        {/* SUPER ADMIN TOGGLE BAR */}
+        {isSysAdmin && (
+          <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 p-4 flex justify-end">
+            <button 
+              onClick={toggleLoggedMode}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${currentUser.isDebug ? 'bg-red-600 text-white shadow-lg shadow-red-900/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-red-600/10 hover:text-red-600'}`}
+            >
+              {currentUser.isDebug ? <EyeOff size={14}/> : <Eye size={14}/>}
+              <span>{currentUser.isDebug ? 'Disable Logged Mode' : 'Enable Logged Mode'}</span>
+            </button>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 max-w-7xl mx-auto w-full">
           
+          {/* VIEW ROUTING */}
           {activeTab === 'dashboard' && <Dashboard teams={teams} members={members} setActiveTab={setActiveTab} />}
           {activeTab === 'teams-setup' && <TeamSetup teams={teams} setTeamModal={setTeamModal} />}
           {activeTab === 'roles' && <RoleManagement roles={roles} setRoleModal={setRoleModal} />}
@@ -485,6 +485,7 @@ export default function App() {
             />
           )}
           
+          {/* DYNAMIC TEAM ROSTERS */}
           {!['dashboard', 'teams-setup', 'roles', 'requests', 'permissions'].includes(activeTab) && (
             <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-800 animate-fade-in relative overflow-hidden">
               <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none text-blue-500 dark:text-blue-400">
@@ -568,7 +569,7 @@ export default function App() {
             <div className="flex items-center space-x-3"><Terminal size={18} strokeWidth={3} /> <span>CORE_SYSTEM_DEBUG_v4.0</span></div>
             <div className="flex items-center space-x-6">
                <button onClick={() => setLogs([])} className="hover:underline">FLUSH_LOGS</button>
-               <div className="flex items-center space-x-2"><Activity size={14}/><span>LATENCY: 24ms</span></div>
+               <button onClick={toggleLoggedMode} className="bg-white/20 px-2 py-1 rounded hover:bg-white/40 transition-colors uppercase font-black text-[9px]">Terminate Session</button>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-6 text-[11px] space-y-2 selection:bg-green-500 selection:text-black">
