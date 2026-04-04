@@ -4,10 +4,9 @@ import {
   Trash2, Edit, ChevronUp, ChevronDown, Star,
   MoveRight, Scissors, Merge, Check, X,
   AlertCircle, Lock, Key, LogOut, UserCheck, Moon, Sun, Sliders, Terminal, Copy, MapPin, Search, Activity, Eye, EyeOff,
-  Briefcase, Bell, Globe, ChevronRight, UploadCloud, Crown, Folder, Layers
+  Briefcase, Bell, Globe, ChevronRight, UploadCloud, Crown, Folder, Layers, Beaker
 } from 'lucide-react';
 
-// FIREBASE IMPORTS
 import { auth, db } from './firebase-config.js';
 import { 
   collection, onSnapshot, doc, setDoc, deleteDoc, query, orderBy, writeBatch 
@@ -99,7 +98,6 @@ const Sidebar = ({ activeTab, setActiveTab, teams, categories, masterCategories,
 
         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mt-8 mb-4">Divisions</div>
         
-        {/* Render Master Categories -> Sub Categories -> Teams */}
         {organizedHierarchy.map(mc => (
           <div key={mc.id} className="mb-2">
             <button onClick={() => toggleMasterCategory(mc.id)} className="w-full flex items-center justify-between px-4 py-2 text-slate-600 hover:text-red-600 dark:text-slate-300 dark:hover:text-red-400 transition-colors group">
@@ -129,18 +127,17 @@ const Sidebar = ({ activeTab, setActiveTab, teams, categories, masterCategories,
                             <span className="truncate text-left">{team.name}</span>
                           </button>
                         ))}
-                        {cat.teams.length === 0 && <div className="px-4 py-1 text-[10px] text-slate-400 italic">Empty Sub-Category</div>}
+                        {cat.teams.length === 0 && <div className="px-4 py-1 text-[10px] text-slate-400 italic">Empty</div>}
                       </div>
                     )}
                   </div>
                 ))}
-                {mc.subCategories.length === 0 && <div className="px-4 py-1 text-[10px] text-slate-400 italic">Empty Master Category</div>}
+                {mc.subCategories.length === 0 && <div className="px-4 py-1 text-[10px] text-slate-400 italic">Empty</div>}
               </div>
             )}
           </div>
         ))}
 
-        {/* Render Orphaned Sub Categories */}
         {orphanedCategories.map(cat => (
           <div key={cat.id} className="mb-2">
             <button onClick={() => toggleCategory(cat.id)} className="w-full flex items-center justify-between px-4 py-2 text-slate-500 hover:text-gray-900 dark:hover:text-white transition-colors group">
@@ -163,10 +160,9 @@ const Sidebar = ({ activeTab, setActiveTab, teams, categories, masterCategories,
           </div>
         ))}
 
-        {/* Render Completely Orphaned Teams */}
         {completelyOrphanedTeams.length > 0 && (
           <div className="mt-4">
-            <div className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Uncategorized Teams</div>
+            <div className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Uncategorized</div>
             {completelyOrphanedTeams.map(team => (
               <button key={team.id} onClick={() => setActiveTab(team.id)} className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl font-bold transition-all text-sm ${activeTab === team.id ? 'bg-slate-100 dark:bg-slate-800 text-red-600 dark:text-white' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                 <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: team.color || '#ef4444' }}></div>
@@ -228,8 +224,8 @@ const Dashboard = ({ teams, members, setActiveTab }) => {
   );
 };
 
-// --- ALL PERSONNEL DIRECTORY ---
-const AllPersonnelView = ({ members, teams, roles, setMemberModal, handleDeleteMember, copyId }) => {
+// --- ALL PERSONNEL DIRECTORY (WITH TEST ACCOUNT GENERATOR) ---
+const AllPersonnelView = ({ members, teams, roles, setMemberModal, setTestUserModal, handleDeleteMember, copyId, isSysAdmin }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTeam, setFilterTeam] = useState('ALL');
 
@@ -250,6 +246,13 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, handleDeleteM
           <p className="text-gray-500 dark:text-slate-400 mt-2 font-medium">Global directory of all active community members.</p>
         </div>
         <div className="flex w-full lg:w-auto space-x-3">
+          {/* SYSTEM OWNER ONLY: Test Account Generator */}
+          {isSysAdmin && (
+            <button onClick={() => setTestUserModal(true)} className="px-4 py-3 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-2xl font-black flex items-center space-x-2 transition-all shadow-sm border border-red-200 dark:border-red-800">
+              <Beaker size={18} /> <span className="hidden xl:inline">Test Account</span>
+            </button>
+          )}
+
           <div className="relative flex-1 lg:w-64">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input 
@@ -288,6 +291,7 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, handleDeleteM
                       <h4 className="font-black text-lg text-gray-900 dark:text-white flex items-center space-x-2">
                         <span>{member.name}</span>
                         {member.isMentor && <Star size={16} className="text-yellow-500 fill-yellow-500" title="Mentor" />}
+                        {member.isTestAccount && <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[10px] px-2 py-1 rounded-lg tracking-widest border border-purple-200 dark:border-purple-800">TEST BOT</span>}
                       </h4>
                       <span className="flex items-center space-x-1 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-2 py-1 rounded-lg shadow-sm">
                         <MapPin size={10}/><span>ID: {member.cityId || '000'}</span>
@@ -324,7 +328,6 @@ const AllPersonnelView = ({ members, teams, roles, setMemberModal, handleDeleteM
     </div>
   );
 };
-
 
 // --- TEAM SETUP (3-TIER HIERARCHY) ---
 const TeamSetupView = ({ teams, categories, masterCategories, setTeamModal, setCategoryModal, setMasterCategoryModal }) => {
@@ -578,6 +581,7 @@ export default function App() {
   const [roleModal, setRoleModal] = useState({ isOpen: false, data: null });
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, data: null });
   const [masterCategoryModal, setMasterCategoryModal] = useState({ isOpen: false, data: null });
+  const [testUserModal, setTestUserModal] = useState(false);
 
   const [logs, setLogs] = useState([]);
   const logsEndRef = useRef(null);
@@ -805,6 +809,49 @@ export default function App() {
     );
   }
 
+  const InternalTestUserModal = () => {
+    if (!testUserModal) return null;
+    const [formData, setFormData] = useState({ name: 'Test User', discordId: 'test1', password: 'password', teamId: '', roleId: '' });
+
+    const handleSaveTestAccount = async (e) => {
+      e.preventDefault();
+      try {
+        const id = `test_${Date.now()}`;
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', id), { 
+          ...formData, 
+          id, 
+          status: 'active', 
+          isTestAccount: true, 
+          cityId: 'TEST-000' 
+        }, { merge: true });
+        setTestUserModal(false);
+        alert(`Test Account Created!\nUsername: ${formData.discordId}\nPassword: ${formData.password}\n\nLog out and use the Admin Bypass form to log in.`);
+      } catch (err) { alert(err.message); }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+        <form onSubmit={handleSaveTestAccount} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-md border border-red-100 dark:border-red-900/50 shadow-2xl shadow-red-900/20">
+          <h2 className="text-2xl font-black mb-2 dark:text-white uppercase flex items-center space-x-2"><Beaker size={24} className="text-red-500"/><span>Test User Generator</span></h2>
+          <p className="text-slate-500 text-sm mb-6 font-medium">Create a bypass account to test specific permissions.</p>
+          <div className="space-y-4 mb-8">
+            <input required className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-red-500" placeholder="Display Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            <input required className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-red-500 font-mono" placeholder="Username (Discord ID)" value={formData.discordId} onChange={e => setFormData({...formData, discordId: e.target.value})} />
+            <input required className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-red-500 font-mono" placeholder="Password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+            <div className="flex space-x-2">
+              <select required className="w-1/2 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-red-500" value={formData.teamId} onChange={e => setFormData({...formData, teamId: e.target.value})}><option value="" disabled>Assign Team...</option>{teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+              <select required className="w-1/2 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none dark:text-white border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-red-500" value={formData.roleId} onChange={e => setFormData({...formData, roleId: e.target.value})}><option value="" disabled>Assign Rank...</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+            </div>
+          </div>
+          <div className="flex space-x-3">
+            <button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white p-4 rounded-2xl font-black shadow-lg shadow-red-600/20 transition-all">Create Test Bot</button>
+            <button type="button" onClick={() => setTestUserModal(false)} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-4 rounded-2xl font-black transition-colors">Cancel</button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
   const InternalMemberModal = () => {
     if (!memberModal.isOpen) return null;
     const isEdit = !!memberModal.data;
@@ -1013,7 +1060,7 @@ export default function App() {
         )}
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 max-w-7xl mx-auto w-full">
           {activeTab === 'dashboard' && <Dashboard teams={teams} members={members} setActiveTab={setActiveTab} />}
-          {activeTab === 'all-personnel' && <AllPersonnelView members={members} teams={teams} roles={roles} setMemberModal={setMemberModal} handleDeleteMember={handleDeleteMember} copyId={copyId} />}
+          {activeTab === 'all-personnel' && <AllPersonnelView members={members} teams={teams} roles={roles} setMemberModal={setMemberModal} setTestUserModal={setTestUserModal} handleDeleteMember={handleDeleteMember} copyId={copyId} isSysAdmin={isSysAdmin} />}
           {activeTab === 'teams-setup' && <TeamSetupView teams={teams} categories={categories} masterCategories={masterCategories} setTeamModal={setTeamModal} setCategoryModal={setCategoryModal} setMasterCategoryModal={setMasterCategoryModal} />}
           {activeTab === 'roles' && <RoleManagementView roles={roles} setRoleModal={setRoleModal} />}
           {activeTab === 'requests' && (
@@ -1102,6 +1149,7 @@ export default function App() {
                           <h4 className="font-black text-xl text-gray-900 dark:text-white flex items-center space-x-2">
                             <span>{member.name}</span>
                             {member.isMentor && <Star size={18} className="text-yellow-500 fill-yellow-500" title="Mentor" />}
+                            {member.isTestAccount && <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[10px] px-2 py-1 rounded-lg tracking-widest border border-purple-200 dark:border-purple-800">TEST BOT</span>}
                           </h4>
                           <span className="flex items-center space-x-1.5 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-sm"><MapPin size={12}/><span>City ID: {member.cityId || '000'}</span></span>
                           <span className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-[0.2em] shadow-lg" style={{ backgroundColor: teams.find(t=>t.id===activeTab)?.color || '#ef4444' }}>{roles.find(r => r.id === member.roleId)?.name || 'UNRANKED'}</span>
@@ -1144,6 +1192,7 @@ export default function App() {
         </div>
       )}
       <InternalMemberModal />
+      <InternalTestUserModal />
       <InternalTeamModal />
       <InternalCategoryModal />
       <InternalMasterCategoryModal />
